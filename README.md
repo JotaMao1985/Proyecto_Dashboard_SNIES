@@ -6,11 +6,7 @@ Este proyecto es un dashboard interactivo construido en **Python (Streamlit)** q
   
 Originalmente desarrollado como una aplicación en **R (Shiny)**, este repositorio representa la migración completa a Python, aprovechando librerías como Plotly, Pandas y Folium para crear una herramienta de análisis de datos moderna y reactiva.  
   
-## 📸 Vista Previa  
-  
-*(Te recomiendo tomar una captura de pantalla de tu dashboard finalizado y colocarla aquí. Simplemente arrastra la imagen al editor de README de GitHub)*  
-  
-`[Imagen de la app de Streamlit mostrando los KPIs y el mapa]`  
+
   
 ## 🚀 Características Principales  
   
