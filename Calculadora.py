@@ -338,7 +338,7 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba):
 st.sidebar.markdown(
     """
     <div style="text-align: center; padding: 1rem; margin-bottom: 1.5rem;">
-        <h2 style="color: #FF8C00; margin: 0; font-size: 1.5rem; border: none;">⛑️ ESAP</h2>
+        <h2 style="color: #FF8C00; margin: 0; font-size: 1.5rem; border: none;"> ESAP</h2>
         <p style="color: #ffffff; font-size: 0.85rem; margin: 0.5rem 0 0 0;">
             Sistema de Costeo de Concursos
         </p>
