@@ -350,7 +350,7 @@ st.sidebar.markdown(
 st.sidebar.title("Navegación")
 opcion = st.sidebar.radio(
     "Seleccione una vista:",
-    ["1. Contexto y EDA", "2. Evaluación Modelos ML", "3. Calculadora de Costos"]
+    ["1. Contexto y EDA", "2. Evaluación Modelos ML", "3. Calculadora de Costos", "4. Cotización Multi-Ciudad"]
 )
 
 st.sidebar.markdown("---")
@@ -679,6 +679,238 @@ elif opcion == "3. Calculadora de Costos":
             # Alerta sobre transporte
             if res['financiero']['Transporte'] > res['financiero']['TOTAL_BASE'] * 0.3:
                 st.warning(f"⚠️ **Atención:** El transporte representa una parte muy alta del presupuesto. La variabilidad en el precio de la gasolina o fletes en {ciudad} podría afectar significativamente el margen.")
+
+# ==============================================================================
+# VISTA 4: COTIZACIÓN MULTI-CIUDAD
+# ==============================================================================
+elif opcion == "4. Cotización Multi-Ciudad":
+    # Header principal con estilo ESAP
+    st.markdown(
+        """
+        <div style="background: linear-gradient(135deg, #003366 0%, #004080 100%); 
+                    padding: 2rem; 
+                    border-radius: 12px; 
+                    margin-bottom: 2rem;
+                    box-shadow: 0 4px 12px rgba(0,51,102,0.2);
+                    border-left: 6px solid #FF8C00;">
+            <h1 style="color: #ffffff; 
+                       margin: 0; 
+                       font-size: 2rem; 
+                       font-weight: 700;
+                       text-align: center;
+                       text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                       border: none;">
+                🌎 Cotizador Nacional Multi-Ciudad
+            </h1>
+            <p style="color: #FFA500; 
+                      text-align: center; 
+                      margin: 0.5rem 0 0 0; 
+                      font-size: 1rem;">
+                Escuela Superior de Administración Pública
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.markdown("Configure un operativo nacional seleccionando múltiples ciudades y asignando aspirantes a cada una.")
+    
+    # 1. Selección de Ciudades
+    ciudades_disponibles = sorted(['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'San Andrés', 'Quibdó', 
+                'Ibagué', 'Tunja', 'Villavicencio', 'Pereira', 'Manizales', 'Cartagena', 
+                'Santa Marta', 'Riohacha', 'Arauca', 'Cúcuta', 'Pasto', 'Popayán'])
+    
+    ciudades_sel = st.multiselect("Seleccione las Ciudades del Operativo:", ciudades_disponibles, default=["Bogotá", "Medellín"])
+    
+    if ciudades_sel:
+        # 2. Configuración de Aspirantes (Data Editor)
+        st.subheader("📋 Asignación de Aspirantes por Ciudad")
+        
+        # Crear DF inicial
+        df_input = pd.DataFrame({
+            'Ciudad': ciudades_sel,
+            'Aspirantes': [500] * len(ciudades_sel), # Valor por defecto
+            'Modalidad': ["Escrita"] * len(ciudades_sel)
+        })
+        
+        # Editor
+        edited_df = st.data_editor(
+            df_input,
+            column_config={
+                "Aspirantes": st.column_config.NumberColumn(
+                    "N° Aspirantes",
+                    min_value=1,
+                    max_value=100000,
+                    step=10,
+                ),
+                "Modalidad": st.column_config.SelectboxColumn(
+                    "Modalidad",
+                    options=["Escrita", "Virtual"],
+                    required=True,
+                )
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        if st.button("Calcular Cotización Global 🚀", type="primary"):
+            
+            resultados_lista = []
+            total_global = 0
+            total_min_global = 0
+            total_max_global = 0
+            total_aspirantes = 0
+            
+            # Barra de progreso
+            progress_text = "Calculando costos por ciudad..."
+            my_bar = st.progress(0, text=progress_text)
+            
+            for idx, row in enumerate(edited_df.itertuples()):
+                ciudad_iter = row.Ciudad
+                asp_iter = row.Aspirantes
+                mod_iter = row.Modalidad
+                
+                # Calcular usando la función existente
+                res = calcular_modelo_parametrico(asp_iter, ciudad_iter, mod_iter)
+                
+                # Acumular
+                costo_base = res['financiero']['TOTAL_BASE']
+                total_global += costo_base
+                total_min_global += res['intervalo']['min']
+                total_max_global += res['intervalo']['max']
+                total_aspirantes += asp_iter
+                
+                resultados_lista.append({
+                    'Ciudad': ciudad_iter,
+                    'Aspirantes': asp_iter,
+                    'Modalidad': mod_iter,
+                    'Costo Total': costo_base,
+                    'Costo Unitario': res['unitario'],
+                    'Sitios': res['logistica']['Sitios'],
+                    'Salones': res['logistica']['Salones'],
+                    'Staff': sum(x['Cantidad'] for x in res['detalle_nomina'])
+                })
+                
+                # Actualizar barra
+                my_bar.progress((idx + 1) / len(edited_df), text=progress_text)
+                
+            my_bar.empty()
+            
+            st.divider()
+            
+            # --- RESULTADOS GLOBALES ---
+            st.subheader("💰 Resumen Financiero Nacional")
+            
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                st.metric("Costo Total Operativo", f"${total_global:,.0f}")
+            with c2:
+                st.metric("Total Aspirantes", f"{total_aspirantes:,.0f}")
+            with c3:
+                if total_aspirantes > 0:
+                    promedio_unitario = total_global / total_aspirantes
+                    st.metric("Costo Promedio / Aspirante", f"${promedio_unitario:,.0f}")
+            
+            # --- INTERVALO DE CONFIANZA ---
+            st.info(f"**Rango de Presupuesto Sugerido:** Entre **${total_min_global:,.0f}** (Optimista) y **${total_max_global:,.0f}** (Conservador)")
+            
+            # --- DETALLE POR CIUDAD ---
+            st.subheader("📍 Desglose por Ciudad")
+            df_res = pd.DataFrame(resultados_lista)
+            
+            # Formato condicional para resaltar costos altos
+            st.dataframe(
+                df_res.style.format({
+                    'Costo Total': '${:,.0f}',
+                    'Costo Unitario': '${:,.0f}',
+                    'Aspirantes': '{:,.0f}'
+                }).background_gradient(subset=['Costo Total'], cmap='Blues'),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # --- DESCARGA ---
+            # Convertir a CSV para descargar
+            csv = df_res.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Descargar Detalle (CSV)",
+                data=csv,
+                file_name='cotizacion_nacional_esap.csv',
+                mime='text/csv',
+            )
+
+            st.divider()
+
+            # --- PESTAÑAS PARA EL DETALLE GLOBAL ---
+            tab_glob_1, tab_glob_2 = st.tabs(["👥 Nómina Detallada Global", "📊 Análisis de Costos Global"])
+
+            with tab_glob_1:
+                # Agrupar nómina global
+                nomina_global = {}
+                for item in resultados_lista:
+                    # Reconstruir detalle de nómina desde los resultados si es necesario, 
+                    # pero como no guardamos el detalle crudo en resultados_lista, 
+                    # lo mejor es recalcular o acumular en el loop principal.
+                    # ESTRATEGIA: Acumular en el loop principal hubiera sido mejor, 
+                    # pero para no romper el flujo, recalculamos rápido o extraemos.
+                    # Dado que 'Staff' es un entero, necesitamos el desglose.
+                    
+                    # RE-CALCULO para obtener detalle preciso (rápido)
+                    res_temp = calcular_modelo_parametrico(item['Aspirantes'], item['Ciudad'], item['Modalidad'])
+                    for cargo in res_temp['detalle_nomina']:
+                        nombre_cargo = cargo['Cargo']
+                        if nombre_cargo not in nomina_global:
+                            nomina_global[nombre_cargo] = {'Cantidad': 0, 'Subtotal': 0, 'Tarifa': cargo['Tarifa']}
+                        
+                        nomina_global[nombre_cargo]['Cantidad'] += cargo['Cantidad']
+                        nomina_global[nombre_cargo]['Subtotal'] += cargo['Subtotal']
+                
+                # Convertir a DF
+                df_nomina_global = pd.DataFrame([
+                    {'Cargo': k, 'Cantidad': v['Cantidad'], 'Tarifa': v['Tarifa'], 'Subtotal': v['Subtotal']}
+                    for k, v in nomina_global.items()
+                ])
+                
+                st.dataframe(
+                    df_nomina_global.style.format({'Tarifa': '${:,.0f}', 'Subtotal': '${:,.0f}'}),
+                    use_container_width=True, hide_index=True
+                )
+
+            with tab_glob_2:
+                # Agrupar costos globales
+                costos_globales = {'Transporte': 0, 'Nómina': 0, 'Impresión': 0, 'Insumos': 0}
+                
+                for item in resultados_lista:
+                    # Mismo approach de re-calculo para precisión de componentes
+                    res_temp = calcular_modelo_parametrico(item['Aspirantes'], item['Ciudad'], item['Modalidad'])
+                    costos_globales['Transporte'] += res_temp['financiero']['Transporte']
+                    costos_globales['Nómina'] += res_temp['financiero']['Nómina']
+                    costos_globales['Impresión'] += res_temp['financiero']['Impresión']
+                    costos_globales['Insumos'] += res_temp['financiero']['Insumos']
+                
+                # Gráfico de Torta
+                df_pie_global = pd.DataFrame({
+                    'Rubro': ['Transporte (Base)', 'Nómina', 'Impresión', 'Insumos'],
+                    'Costo': [costos_globales['Transporte'], costos_globales['Nómina'], 
+                              costos_globales['Impresión'], costos_globales['Insumos']]
+                })
+                
+                fig_pie_global = px.pie(df_pie_global, values='Costo', names='Rubro', hole=0.4, 
+                               title="Distribución del Presupuesto Nacional",
+                               color_discrete_sequence=[ESAP_PALETTE['primary'], 
+                                                       ESAP_PALETTE['secondary'],
+                                                       ESAP_PALETTE['accent'], 
+                                                       ESAP_PALETTE['orange']])
+                fig_pie_global.update_layout(
+                    font=dict(family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"),
+                    paper_bgcolor=ESAP_PALETTE['neutral_light']
+                )
+                st.plotly_chart(fig_pie_global, use_container_width=True)
+                
+                # Alerta Global
+                if costos_globales['Transporte'] > total_global * 0.3:
+                    st.warning(f"⚠️ **Atención:** A nivel nacional, el transporte representa el {costos_globales['Transporte']/total_global:.1%} del presupuesto. Considere optimizar las ciudades con logística compleja.")
 
 # Footer
 st.sidebar.markdown("---")
