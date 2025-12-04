@@ -813,7 +813,27 @@ elif opcion == "4. Cotización Multi-Ciudad":
                     st.metric("Costo Promedio / Aspirante", f"${promedio_unitario:,.0f}")
             
             # --- INTERVALO DE CONFIANZA ---
-            st.info(f"**Rango de Presupuesto Sugerido:** Entre **${total_min_global:,.0f}** (Optimista) y **${total_max_global:,.0f}** (Conservador)")
+            st.markdown(
+                f"""
+                <div style="
+                    background: linear-gradient(90deg, rgba(0,123,255,0.1) 0%, rgba(40,167,69,0.1) 100%);
+                    border-left: 4px solid #007bff;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 10px 0;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                ">
+                    <h4 style="margin: 0; color: #007bff; font-size: 16px;">
+                        💡 Rango de Presupuesto Sugerido
+                    </h4>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; color: #333;">
+                        Entre <strong style="color: #28a745;">${total_min_global:,.0f}</strong> (Optimista) 
+                        y <strong style="color: #dc3545;">${total_max_global:,.0f}</strong> (Conservador)
+                    </p>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
             
             # --- DETALLE POR CIUDAD ---
             st.subheader("📍 Desglose por Ciudad")
