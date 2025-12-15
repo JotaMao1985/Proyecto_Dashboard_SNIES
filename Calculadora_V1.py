@@ -271,6 +271,47 @@ st.markdown(
 )
 
 # ==============================================================================
+# DATOS MAESTROS (CONSTANTES)
+# ==============================================================================
+# BASE DE DATOS: 'Ciudad': [(Limite_R1, Precio_R1), (Limite_R2, Precio_R2), (Limite_R3, Precio_R3)]
+TARIFARIO_DINAMICO = {
+    'Medellín':     [(60, 122241), (80, 41738), (90, 38622)],
+    'Arauca':       [(60, 84067), (150, 67159), (200, 70195)],
+    'Barranquilla': [(30, 75192), (40, 256818), (60, 59254)],
+    'Cartagena':    [(40, 72733), (60, 63442), (80, 56277)],
+    'Tunja':        [(60, 125619), (80, 29874), (100, 28069)],
+    'Manizales':    [(20, 255402), (30, 342424), (40, 128070)],
+    'Florencia':    [(10, 1390909), (15, 927273), (35, 76983)],
+    'Yopal':        [(50, 157850), (70, 198701), (90, 61669)],
+    'Popayán':      [(20, 241250), (40, 256818), (60, 95316)],
+    'Valledupar':   [(20, 235340), (40, 302273), (60, 71270)],
+    'Quibdó':       [(50, 85180), (70, 198701), (90, 61382)],
+    'Montería':     [(10, 1209091), (20, 604545), (30, 87049)],
+    'Neiva':        [(50, 51194), (70, 45833), (80, 42051)],
+    'Riohacha':     [(10, 1390909), (15, 927273), (35, 110447)],
+    'Santa Marta':  [(30, 201855), (50, 241818), (60, 83287)],
+    'Villavicencio':[(30, 189811), (40, 302273), (40, 118593)],
+    'Pasto':        [(40, 81041), (60, 69076), (70, 61654)],
+    'Bogotá':       [(120, 83729), (150, 62275), (200, 47055)],
+    'Cúcuta':       [(20, 240305), (40, 302273), (60, 76463)],
+    'Mocoa':        [(10, 1390909), (20, 695455), (30, 114434)],
+    'Armenia':      [(50, 52251), (70, 47151), (90, 42993)],
+    'Pereira':      [(60, 50643), (80, 45330), (100, 41300)],
+    'San Andrés':   [(10, 1572727), (10, 1572727), (20, 138563)],
+    'Bucaramanga':  [(40, 165536), (60, 201515), (80, 82801)],
+    'Sincelejo':    [(20, 250082), (20, 604545), (40, 87534)],
+    'Ibagué':       [(60, 129655), (80, 31983), (100, 30041)],
+    'Cali':         [(20, 190582), (40, 104349), (60, 72246)]
+}
+
+TARIFAS_NOMINA = {
+    'Delegado Prueba': 300000, 'Delegado Custodia': 300000, 'Coord. Sitio': 283333,
+    'Coord. Aulas': 283333, 'Jefe Salón': 200000, 'Orientador': 200000,
+    'Dactiloscopista': 200000, 'Aux. Aseo': 200000, 'Seguridad': 200000,
+    'Enfermería': 200000, 'Ing. Sistemas': 283333
+}
+
+# ==============================================================================
 # 1. LÓGICA DEL NEGOCIO (FUNCIONES DEL MODELO PARAMÉTRICO)
 # ==============================================================================
 
@@ -281,42 +322,9 @@ def obtener_costo_unitario_logistico(ciudad, n_aspirantes):
     Lógica: Busca la ciudad y aplica el precio según la cantidad de aspirantes.
     """
     ciudad_key = ciudad.title()
-    
-    # BASE DE DATOS: 'Ciudad': [(Limite_R1, Precio_R1), (Limite_R2, Precio_R2), (Limite_R3, Precio_R3)]
-    # Precios extraídos de columnas 'MEDIA ARMONICA VALOR UNITARIO IMPUESTOS INCLUIDOS'
-    tarifario_dinamico = {
-        'Medellín':     [(60, 122241), (80, 41738), (90, 38622)],
-        'Arauca':       [(60, 84067), (150, 67159), (200, 70195)],
-        'Barranquilla': [(30, 75192), (40, 256818), (60, 59254)],
-        'Cartagena':    [(40, 72733), (60, 63442), (80, 56277)],
-        'Tunja':        [(60, 125619), (80, 29874), (100, 28069)],
-        'Manizales':    [(20, 255402), (30, 342424), (40, 128070)],
-        'Florencia':    [(10, 1390909), (15, 927273), (35, 76983)],
-        'Yopal':        [(50, 157850), (70, 198701), (90, 61669)],
-        'Popayán':      [(20, 241250), (40, 256818), (60, 95316)],
-        'Valledupar':   [(20, 235340), (40, 302273), (60, 71270)],
-        'Quibdó':       [(50, 85180), (70, 198701), (90, 61382)],
-        'Montería':     [(10, 1209091), (20, 604545), (30, 87049)],
-        'Neiva':        [(50, 51194), (70, 45833), (80, 42051)],
-        'Riohacha':     [(10, 1390909), (15, 927273), (35, 110447)],
-        'Santa Marta':  [(30, 201855), (50, 241818), (60, 83287)],
-        'Villavicencio':[(30, 189811), (40, 302273), (40, 118593)],
-        'Pasto':        [(40, 81041), (60, 69076), (70, 61654)],
-        'Bogotá':       [(120, 83729), (150, 62275), (200, 47055)],
-        'Cúcuta':       [(20, 240305), (40, 302273), (60, 76463)],
-        'Mocoa':        [(10, 1390909), (20, 695455), (30, 114434)],
-        'Armenia':      [(50, 52251), (70, 47151), (90, 42993)],
-        'Pereira':      [(60, 50643), (80, 45330), (100, 41300)],
-        'San Andrés':   [(10, 1572727), (10, 1572727), (20, 138563)],
-        'Bucaramanga':  [(40, 165536), (60, 201515), (80, 82801)],
-        'Sincelejo':    [(20, 250082), (20, 604545), (40, 87534)],
-        'Ibagué':       [(60, 129655), (80, 31983), (100, 30041)],
-        'Cali':         [(20, 190582), (40, 104349), (60, 72246)]
-    }
-    
     # 1. Identificar datos de la ciudad (Normalización de nombres)
     datos_ciudad = None
-    for k, v in tarifario_dinamico.items():
+    for k, v in TARIFARIO_DINAMICO.items():
         if k in ciudad_key or ciudad_key in k:
             datos_ciudad = v
             break
@@ -479,26 +487,19 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba):
     n_seguridad = n_sitios * 2
     
     # --- B. NÓMINA ---
-    # (Misma estructura de tarifas anterior...)
-    tarifas_nomina = {
-        'Delegado Prueba': 300000, 'Delegado Custodia': 300000, 'Coord. Sitio': 283333,
-        'Coord. Aulas': 283333, 'Jefe Salón': 200000, 'Orientador': 200000,
-        'Dactiloscopista': 200000, 'Aux. Aseo': 200000, 'Seguridad': 200000,
-        'Enfermería': 200000, 'Ing. Sistemas': 283333
-    }
     
     detalle_nomina = [
-        {'Cargo': 'Delegado Prueba', 'Cant': n_delegado_prueba, 'Val': tarifas_nomina['Delegado Prueba']},
-        {'Cargo': 'Delegado Custodia', 'Cant': n_delegado_custodia, 'Val': tarifas_nomina['Delegado Custodia']},
-        {'Cargo': 'Coord. Sitio', 'Cant': n_coord_sitio, 'Val': tarifas_nomina['Coord. Sitio']},
-        {'Cargo': 'Coord. Aulas', 'Cant': n_coord_aula, 'Val': tarifas_nomina['Coord. Aulas']},
-        {'Cargo': 'Jefe Salón', 'Cant': n_jefes_salon, 'Val': tarifas_nomina['Jefe Salón']},
-        {'Cargo': 'Orientador', 'Cant': n_orientadores, 'Val': tarifas_nomina['Orientador']},
-        {'Cargo': 'Ing. Sistemas', 'Cant': n_ingenieros, 'Val': tarifas_nomina['Ing. Sistemas']},
-        {'Cargo': 'Dactiloscopista', 'Cant': n_dactilo, 'Val': tarifas_nomina['Dactiloscopista']},
-        {'Cargo': 'Aux. Aseo', 'Cant': n_aseo, 'Val': tarifas_nomina['Aux. Aseo']},
-        {'Cargo': 'Seguridad', 'Cant': n_seguridad, 'Val': tarifas_nomina['Seguridad']},
-        {'Cargo': 'Enfermería', 'Cant': n_enfermeros, 'Val': tarifas_nomina['Enfermería']}
+        {'Cargo': 'Delegado Prueba', 'Cant': n_delegado_prueba, 'Val': TARIFAS_NOMINA['Delegado Prueba']},
+        {'Cargo': 'Delegado Custodia', 'Cant': n_delegado_custodia, 'Val': TARIFAS_NOMINA['Delegado Custodia']},
+        {'Cargo': 'Coord. Sitio', 'Cant': n_coord_sitio, 'Val': TARIFAS_NOMINA['Coord. Sitio']},
+        {'Cargo': 'Coord. Aulas', 'Cant': n_coord_aula, 'Val': TARIFAS_NOMINA['Coord. Aulas']},
+        {'Cargo': 'Jefe Salón', 'Cant': n_jefes_salon, 'Val': TARIFAS_NOMINA['Jefe Salón']},
+        {'Cargo': 'Orientador', 'Cant': n_orientadores, 'Val': TARIFAS_NOMINA['Orientador']},
+        {'Cargo': 'Ing. Sistemas', 'Cant': n_ingenieros, 'Val': TARIFAS_NOMINA['Ing. Sistemas']},
+        {'Cargo': 'Dactiloscopista', 'Cant': n_dactilo, 'Val': TARIFAS_NOMINA['Dactiloscopista']},
+        {'Cargo': 'Aux. Aseo', 'Cant': n_aseo, 'Val': TARIFAS_NOMINA['Aux. Aseo']},
+        {'Cargo': 'Seguridad', 'Cant': n_seguridad, 'Val': TARIFAS_NOMINA['Seguridad']},
+        {'Cargo': 'Enfermería', 'Cant': n_enfermeros, 'Val': TARIFAS_NOMINA['Enfermería']}
     ]
     detalle_nomina = [d for d in detalle_nomina if d['Cant'] > 0]
     total_nomina = sum([d['Cant'] * d['Val'] for d in detalle_nomina])
@@ -1035,7 +1036,8 @@ elif opcion == "4. Cotización Multi-Ciudad":
                     'Costo Unitario': res['unitario'],
                     'Sitios': res['logistica']['Sitios'],
                     'Salones': res['logistica']['Salones'],
-                    'Staff': sum(x['Cantidad'] for x in res['detalle_nomina'])
+                    'Staff': sum(x['Cantidad'] for x in res['detalle_nomina']),
+                    'full_res': res # Guardar resultado completo para evitar recálculos
                 })
                 
                 # Actualizar barra
@@ -1085,6 +1087,8 @@ elif opcion == "4. Cotización Multi-Ciudad":
             # --- DETALLE POR CIUDAD ---
             st.subheader("📍 Desglose por Ciudad")
             df_res = pd.DataFrame(resultados_lista)
+            if 'full_res' in df_res.columns:
+                df_res = df_res.drop(columns=['full_res'])
             
             # Formato condicional para resaltar costos altos
             st.dataframe(
@@ -1167,8 +1171,10 @@ DETALLE POR CIUDAD
                     # pero para no romper el flujo, recalculamos rápido o extraemos.
                     # Dado que 'Staff' es un entero, necesitamos el desglose.
                     
-                    # RE-CALCULO para obtener detalle preciso (rápido)
-                    res_temp = calcular_modelo_parametrico(item['Aspirantes'], item['Ciudad'], item['Modalidad'])
+                    # ESTRATEGIA: Usar el resultado pre-calculado
+                    
+                    # RE-CALCULO: OPTIMIZADO
+                    res_temp = item['full_res']
                     for cargo in res_temp['detalle_nomina']:
                         nombre_cargo = cargo['Cargo']
                         if nombre_cargo not in nomina_global:
@@ -1193,7 +1199,7 @@ DETALLE POR CIUDAD
                 costos_globales = {} # Rubro -> Costo
                 
                 for item in resultados_lista:
-                    res_temp = calcular_modelo_parametrico(item['Aspirantes'], item['Ciudad'], item['Modalidad'])
+                    res_temp = item['full_res']
                     
                     # Agregar componentes principales
                     costos_globales['Transporte (Base)'] = costos_globales.get('Transporte (Base)', 0) + res_temp['financiero']['Transporte']
@@ -1255,8 +1261,8 @@ DETALLE POR CIUDAD
                 costo_total_ciudad = item['Costo Total']
                 
                 with st.expander(f"{nombre_ciudad} ({aspirantes_ciudad} asp) - ${costo_total_ciudad:,.0f} ({modalidad_ciudad})"):
-                    # Recalcular detalles para esta ciudad
-                    res_ciudad = calcular_modelo_parametrico(aspirantes_ciudad, nombre_ciudad, modalidad_ciudad)
+                    # Recalcular detalles para esta ciudad: OPTIMIZADO
+                    res_ciudad = item['full_res']
                     
                     # Preparar DF
                     # --- VISUALIZACIÓN CIUDAD COMPUESTA ---
