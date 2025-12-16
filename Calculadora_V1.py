@@ -10,7 +10,7 @@ import math
 # CONFIGURACIÓN DE LA PÁGINA
 # ==============================================================================
 st.set_page_config(
-    page_title="Sistema de Costeo de Concursos - ESAP",
+    page_title="Sistema de Costeo de Concursos",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -315,6 +315,54 @@ TARIFAS_NOMINA = {
 # 1. LÓGICA DEL NEGOCIO (FUNCIONES DEL MODELO PARAMÉTRICO)
 # ==============================================================================
 
+def obtener_costos_tecnologia(cantidad_equipos_base, n_sitios, requiere_alquiler):
+    """
+    Calcula costos de alquiler basado en la cantidad solicitada MANUALMENTE por el usuario.
+    El sistema agrega automáticamente el 10% de reserva técnica (backup).
+    """
+    if not requiere_alquiler or cantidad_equipos_base == 0:
+        return {'Total': 0, 'Detalle': {}}
+
+    # 1. CÁLCULO DE EQUIPOS TOTALES
+    # Base solicitada + 10% Backup (Mínimo 1 equipo de backup por sitio si es muy poco)
+    n_backup = math.ceil(cantidad_equipos_base * 0.10)
+    
+    # Regla de seguridad: Mínimo 2 de backup por sitio si la cantidad es muy baja
+    if n_backup < (n_sitios * 2): 
+        n_backup = n_sitios * 2
+        
+    total_equipos_facturables = cantidad_equipos_base + n_backup
+    
+    # 2. PRECIOS POR RANGO (Economía de escala sobre el TOTAL facturable)
+    # Rango 1: 0-1000 | R2: 1001-1500 | R3: >1500
+    limites = (1000, 1500)
+
+    # Alquiler
+    p_alquiler = get_precio_rango(total_equipos_facturables, limites, (68000, 55000, 48000))
+    # Logística
+    p_logistica = get_precio_rango(total_equipos_facturables, limites, (15000, 12000, 10000))
+    # Montaje
+    p_montaje = get_precio_rango(total_equipos_facturables, limites, (7000, 5000, 4000))
+    
+    # 3. TOTALES
+    costo_alquiler = total_equipos_facturables * p_alquiler
+    costo_logistica = total_equipos_facturables * p_logistica
+    costo_montaje = total_equipos_facturables * p_montaje
+    
+    total_tech = costo_alquiler + costo_logistica + costo_montaje
+    
+    return {
+        'Total': total_tech,
+        'Detalle': {
+            'Alquiler Equipos': costo_alquiler,
+            'Logística Hardware': costo_logistica,
+            'Montaje y Config': costo_montaje,
+            'Equipos Base': cantidad_equipos_base,
+            'Backup (10%)': n_backup,
+            'Total Equipos Facturados': total_equipos_facturables
+        }
+    }
+
 def obtener_costo_unitario_logistico(ciudad, n_aspirantes):
     """
     Retorna el Costo Unitario de Transporte exacto según el volumen (Rango 1, 2 o 3).
@@ -346,6 +394,30 @@ def obtener_costo_unitario_logistico(ciudad, n_aspirantes):
     else:
         # Volumen alto (Rango 3 o superior) -> Precio más económico
         return r3_price
+
+def obtener_costos_disposicion_final(n_aspirantes):
+    """
+    Calcula costos de custodia y destrucción segura de material.
+    Estimación: $1,500 COP por aspirante (Custodia 3 meses + Destrucción Certificada).
+    """
+    # Tarifa estimada por aspirante para gestión documental segura
+    tarifa_custodia = 1000 
+    tarifa_destruccion = 500
+    total = n_aspirantes * (tarifa_custodia + tarifa_destruccion)
+    return {
+        'Total': total,
+        'Detalle': {
+            'Custodia Temporal': n_aspirantes * tarifa_custodia,
+            'Destrucción Certificada': n_aspirantes * tarifa_destruccion
+        }
+    }
+
+def obtener_costo_transporte(ciudad, n_aspirantes):
+    """
+    Wrapper que calcula el costo total de transporte basado en el unitario.
+    """
+    unitario = obtener_costo_unitario_logistico(ciudad, n_aspirantes)
+    return unitario * n_aspirantes
 
 
 # ==============================================================================
@@ -465,19 +537,29 @@ def obtener_costos_materiales_detallados(n_aspirantes, n_salones, n_sitios, tota
                  costo_empaque_total + costo_empaque_adic + costo_procesamiento
     }
 
-def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba):
-    # --- A. MOTOR LÓGICO ---
+def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0):
+    
+    # --- A. MOTOR LÓGICO (Cálculo de Cantidades) ---
     n_sitios = math.ceil(n_aspirantes / 500)
     n_salones = math.ceil(n_aspirantes / 25) 
     
-    # Lógica Staff (Igual que antes)
+    # Reglas de Staff según Modalidad
     if tipo_prueba == "Virtual":
-        div_coord = 4; mul_jefe = 2; n_delegado_custodia = 0; n_ingenieros = n_sitios
+        div_coord = 4           # Virtual: 1 Coord cada 4 salones (Más supervisión)
+        mul_jefe = 2            # Virtual: 2 Jefes por salón
+        n_custodia = 0          # Virtual: No requiere delegado custodia
+        n_ing = n_sitios        # Virtual: 1 Ingeniero por sitio (Obligatorio)
     else:
-        div_coord = 6; mul_jefe = 1; n_delegado_custodia = n_sitios; n_ingenieros = 0
-    
+        div_coord = 6           # Escrita: 1 Coord cada 6 salones
+        mul_jefe = 1            # Escrita: 1 Jefe por salón
+        n_custodia = n_sitios   # Escrita: 1 Delegado custodia por sitio
+        n_ing = 0               # Escrita: No requiere ingeniero
+        requiere_alquiler = False # Forzamos False si es escrita
+        
     n_coord_aula = math.ceil(n_salones / div_coord)
     n_jefes_salon = n_salones * mul_jefe
+    
+    # Staff Común
     n_aseo = math.ceil(n_salones / 6)
     n_orientadores = math.ceil(n_salones / 6)
     n_dactilo = math.ceil(n_salones / 4)
@@ -485,64 +567,83 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba):
     n_coord_sitio = n_sitios
     n_enfermeros = n_sitios
     n_seguridad = n_sitios * 2
-    
-    # --- B. NÓMINA ---
-    
+
+    # --- B. CÁLCULO NÓMINA ---
+    # Tarifas base 
     detalle_nomina = [
-        {'Cargo': 'Delegado Prueba', 'Cant': n_delegado_prueba, 'Val': TARIFAS_NOMINA['Delegado Prueba']},
-        {'Cargo': 'Delegado Custodia', 'Cant': n_delegado_custodia, 'Val': TARIFAS_NOMINA['Delegado Custodia']},
-        {'Cargo': 'Coord. Sitio', 'Cant': n_coord_sitio, 'Val': TARIFAS_NOMINA['Coord. Sitio']},
-        {'Cargo': 'Coord. Aulas', 'Cant': n_coord_aula, 'Val': TARIFAS_NOMINA['Coord. Aulas']},
-        {'Cargo': 'Jefe Salón', 'Cant': n_jefes_salon, 'Val': TARIFAS_NOMINA['Jefe Salón']},
-        {'Cargo': 'Orientador', 'Cant': n_orientadores, 'Val': TARIFAS_NOMINA['Orientador']},
-        {'Cargo': 'Ing. Sistemas', 'Cant': n_ingenieros, 'Val': TARIFAS_NOMINA['Ing. Sistemas']},
-        {'Cargo': 'Dactiloscopista', 'Cant': n_dactilo, 'Val': TARIFAS_NOMINA['Dactiloscopista']},
-        {'Cargo': 'Aux. Aseo', 'Cant': n_aseo, 'Val': TARIFAS_NOMINA['Aux. Aseo']},
-        {'Cargo': 'Seguridad', 'Cant': n_seguridad, 'Val': TARIFAS_NOMINA['Seguridad']},
-        {'Cargo': 'Enfermería', 'Cant': n_enfermeros, 'Val': TARIFAS_NOMINA['Enfermería']}
+        {'Cargo': 'Delegado Prueba', 'Cant': n_delegado_prueba, 'Val': 300000},
+        {'Cargo': 'Delegado Custodia', 'Cant': n_custodia, 'Val': 300000},
+        {'Cargo': 'Coord. Sitio', 'Cant': n_coord_sitio, 'Val': 283333},
+        {'Cargo': 'Coord. Aulas', 'Cant': n_coord_aula, 'Val': 283333},
+        {'Cargo': 'Jefe Salón', 'Cant': n_jefes_salon, 'Val': 200000},
+        {'Cargo': 'Orientador', 'Cant': n_orientadores, 'Val': 200000},
+        {'Cargo': 'Ing. Sistemas', 'Cant': n_ing, 'Val': 283333},
+        {'Cargo': 'Dactiloscopista', 'Cant': n_dactilo, 'Val': 200000},
+        {'Cargo': 'Aux. Aseo', 'Cant': n_aseo, 'Val': 200000},
+        {'Cargo': 'Seguridad', 'Cant': n_seguridad, 'Val': 200000},
+        {'Cargo': 'Enfermería', 'Cant': n_enfermeros, 'Val': 200000}
     ]
+    # Filtrar y sumar
     detalle_nomina = [d for d in detalle_nomina if d['Cant'] > 0]
     total_nomina = sum([d['Cant'] * d['Val'] for d in detalle_nomina])
     total_staff = sum([d['Cant'] for d in detalle_nomina])
 
-    # --- C. MATERIALES DETALLADOS ---
-    res_mat = obtener_costos_materiales_detallados(n_aspirantes, n_salones, n_sitios, total_staff)
-    total_materiales_general = res_mat['Total']
-    
-    # --- D. KITS ASEO (Separado) ---
-    precio_kit_aseo = 131864
-    total_kits_aseo = n_aseo * precio_kit_aseo
+    # --- C. MATERIALES (8 Categorías Detalladas) ---
+    # Llama a la función que usa rangos para lectura óptica, empaques, etc.
+    res_materiales = obtener_costos_materiales_detallados(n_aspirantes, n_salones, n_sitios, total_staff)
+    total_materiales = res_materiales['Total']
 
-    # --- E. TRANSPORTE ---
-    # Usar la función de transporte dinámica corregida en el paso anterior
-    tarifa_transporte = obtener_costo_unitario_logistico(ciudad, n_aspirantes)
-    total_transporte = n_aspirantes * tarifa_transporte
+    # --- D. INSUMOS DE ASEO Y LIMPIEZA ---
+    # Kit Aseo calculado por Rango 3 ($131,864)
+    total_kits_aseo = n_aseo * 131864
 
-    # --- F. TOTALES ---
-    total_proyecto = total_nomina + total_materiales_general + total_kits_aseo + total_transporte
+    # --- E. DISPOSICIÓN FINAL (Custodia + Destrucción) ---
+    res_disposicion = obtener_costos_disposicion_final(n_aspirantes)
+    total_disposicion = res_disposicion['Total']
+
+    # --- F. ALQUILER DE TECNOLOGÍA (Si aplica) ---
+    # --- F. ALQUILER DE TECNOLOGÍA (Si aplica) ---
+    res_tecnologia = obtener_costos_tecnologia(n_equipos_alquiler, n_sitios, requiere_alquiler)
+    total_tecnologia = res_tecnologia['Total']
+
+    # --- G. TRANSPORTE Y LOGÍSTICA ---
+    # Función dinámica (27 ciudades x 3 rangos)
+    costo_transporte = obtener_costo_transporte(ciudad, n_aspirantes)
+
+    # --- H. CONSOLIDACIÓN FINAL ---
+    total_proyecto = (total_nomina + total_materiales + total_kits_aseo + 
+                      total_disposicion + total_tecnologia + costo_transporte)
     
+    # Intervalos de Riesgo
+    factor_riesgo = 1.10 # 10% imprevistos
+    if tipo_prueba == "Virtual": factor_riesgo = 1.15 # Mayor riesgo tecnológico
+
     return {
         'logistica': {
             'Sitios': n_sitios, 
-            'Salones': n_salones,
-            'Staff Total': total_staff
+            'Salones': n_salones, 
+            'Staff Total': total_staff,
+            'PCs Alquilados (Base+Backup)': res_tecnologia['Detalle'].get('Total Equipos Facturados', 0)
         },
         'detalle_nomina': [{'Cargo': d['Cargo'], 'Cantidad': d['Cant'], 'Tarifa': d['Val'], 'Subtotal': d['Cant']*d['Val']} for d in detalle_nomina],
-        'desglose_materiales': res_mat['Variables'],
+        'desglose_materiales': res_materiales['Variables'],
+        'costos_fijos': res_materiales['Fijos'],
         'financiero': {
-            'Transporte': total_transporte,
+            'Transporte': costo_transporte,
             'Nómina': total_nomina,
-            'Materiales (8 Cats)': total_materiales_general,
-            'Kits de Aseo': total_kits_aseo,
+            'Materiales': total_materiales,
+            'Tecnología': total_tecnologia,
+            'Aseo y Limpieza': total_kits_aseo,
+            'Disposición Final': total_disposicion,
             'TOTAL_BASE': total_proyecto
         },
         'intervalo': {
             'min': total_proyecto * 0.95,
-            'max': total_proyecto * 1.10,
-            'gap': total_proyecto * 0.15
+            'max': total_proyecto * factor_riesgo,
+            'gap': (total_proyecto * factor_riesgo) - (total_proyecto * 0.95)
         },
         'unitario': total_proyecto / n_aspirantes,
-        'unitario_max': (total_proyecto * 1.10) / n_aspirantes
+        'unitario_max': (total_proyecto * factor_riesgo) / n_aspirantes
     }
 
 # ==============================================================================
@@ -555,8 +656,7 @@ st.sidebar.image("https://www1.funcionpublica.gov.co/documents/28587425/0/Logo-E
 st.sidebar.markdown(
     """
     <div style="text-align: center; padding: 1rem; margin-bottom: 1rem; 
-                background: rgba(255,255,255,0.1); border-radius: 12px;">
-        <h2 style="color: #FF8C00; margin: 0; font-size: 1.5rem; border: none;">ESAP</h2>
+                background: rgba(255,255,255,0.1); border-radius: 12px;">    
         <p style="color: #ffffff; font-size: 0.85rem; margin: 0.5rem 0 0 0; opacity: 0.9;">
             Sistema de Costeo de Concursos
         </p>
@@ -820,12 +920,35 @@ elif opcion == "3. Calculadora de Costos":
                 help="Escrita: requiere más jefes de salón. Virtual: menor personal pero mayor infraestructura tecnológica."
             )
             
+            # Checkbox condicional: Solo aparece si es Virtual
+            use_alquiler = False
+            cantidad_equipos = 0
+            
+            if prueba == "Virtual":
+                use_alquiler = st.checkbox("¿Requiere Alquiler de PCs?", help="Active si necesita rentar equipos.")
+                
+                if use_alquiler:
+                    st.markdown("---")
+                    # Por defecto sugerimos n_aspirantes, pero el usuario puede bajarlo (ej. si hay turnos)
+                    cantidad_equipos = st.number_input(
+                        "💻 Cantidad de Equipos a Alquilar",
+                        min_value=1,
+                        max_value=aspirantes, # No puedes alquilar más que aspirantes (teóricamente)
+                        value=aspirantes,     # Valor por defecto = 1:1
+                        step=10,
+                        help="Ingrese la cantidad base requerida. El sistema sumará automáticamente el 10% de backup."
+                    )
+                    
+                    # Feedback visual inmediato para el usuario
+                    if cantidad_equipos < aspirantes:
+                        st.caption(f"ℹ️ Estás alquilando equipos para el **{cantidad_equipos/aspirantes:.0%}** de los aspirantes. (Asume {math.ceil(aspirantes/cantidad_equipos)} turnos).")
+
         submitted = st.form_submit_button("Calcular Cotización 🚀", type="primary", use_container_width=True)
     
     if submitted:
         # Ejecutar lógica con spinner
         with st.spinner('🔄 Calculando cotización... Por favor espere.'):
-            res = calcular_modelo_parametrico(aspirantes, ciudad, prueba)
+            res = calcular_modelo_parametrico(aspirantes, ciudad, prueba, use_alquiler, cantidad_equipos)
         
         st.divider()
         st.success('✅ Cotización calculada exitosamente!')
@@ -899,7 +1022,8 @@ elif opcion == "3. Calculadora de Costos":
             df_main = pd.DataFrame([
                 {'Rubro': 'Transporte (Base)', 'Costo': res['financiero']['Transporte']},
                 {'Rubro': 'Nómina', 'Costo': res['financiero']['Nómina']},
-                {'Rubro': 'Kits de Aseo', 'Costo': res['financiero']['Kits de Aseo']},
+                {'Rubro': 'Kits de Aseo', 'Costo': res['financiero']['Aseo y Limpieza']},
+                {'Rubro': 'Tecnología', 'Costo': res['financiero']['Tecnología']},
                 {'Rubro': 'Materiales Operativos', 'Costo': costo_materiales_ops}
             ])
             
@@ -914,7 +1038,7 @@ elif opcion == "3. Calculadora de Costos":
 
             # Trace 1: Pie Central
             fig.add_trace(go.Pie(labels=df_main['Rubro'], values=df_main['Costo'], hole=0.4,
-                                 marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00']), row=1, col=1)
+                                 marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00', '#28a745', '#6c757d']), row=1, col=1)
 
             # Trace 2: Bar Breakdown
             fig.add_trace(go.Bar(x=df_details['Costo'], y=df_details['Item'], orientation='h',
@@ -1204,7 +1328,9 @@ DETALLE POR CIUDAD
                     # Agregar componentes principales
                     costos_globales['Transporte (Base)'] = costos_globales.get('Transporte (Base)', 0) + res_temp['financiero']['Transporte']
                     costos_globales['Nómina'] = costos_globales.get('Nómina', 0) + res_temp['financiero']['Nómina']
-                    costos_globales['Kits de Aseo'] = costos_globales.get('Kits de Aseo', 0) + res_temp['financiero']['Kits de Aseo']
+                    costos_globales['Aseo y Limpieza'] = costos_globales.get('Aseo y Limpieza', 0) + res_temp['financiero']['Aseo y Limpieza']
+                    costos_globales['Tecnología'] = costos_globales.get('Tecnología', 0) + res_temp['financiero']['Tecnología']
+                    costos_globales['Disposición Final'] = costos_globales.get('Disposición Final', 0) + res_temp['financiero']['Disposición Final']
                     
                     # Agregar materiales detallados
                     for k, v in res_temp['desglose_materiales'].items():
@@ -1213,18 +1339,20 @@ DETALLE POR CIUDAD
                 # Convertir a DF
                 # --- VISUALIZACIÓN GLOBAL COMPUESTA (PIE + BAR) ---
                 total_costos = sum(costos_globales.values())
-                total_materiales_glob = sum([v for k, v in costos_globales.items() if k not in ['Transporte (Base)', 'Nómina', 'Kits de Aseo']])
+                total_materiales_glob = sum([v for k, v in costos_globales.items() if k not in ['Transporte (Base)', 'Nómina', 'Aseo y Limpieza', 'Tecnología', 'Disposición Final']])
                 
                 df_main_g = pd.DataFrame([
                     {'Rubro': 'Transporte (Base)', 'Costo': costos_globales.get('Transporte (Base)', 0)},
                     {'Rubro': 'Nómina', 'Costo': costos_globales.get('Nómina', 0)},
-                    {'Rubro': 'Kits de Aseo', 'Costo': costos_globales.get('Kits de Aseo', 0)},
+                    {'Rubro': 'Aseo y Limpieza', 'Costo': costos_globales.get('Aseo y Limpieza', 0)},
+                    {'Rubro': 'Tecnología', 'Costo': costos_globales.get('Tecnología', 0)},
+                    {'Rubro': 'Disposición Final', 'Costo': costos_globales.get('Disposición Final', 0)},
                     {'Rubro': 'Materiales Operativos', 'Costo': total_materiales_glob}
                 ])
                 
                 df_details_g = pd.DataFrame([
                     {'Item': k, 'Costo': v} for k, v in costos_globales.items() 
-                    if k not in ['Transporte (Base)', 'Nómina', 'Kits de Aseo']
+                    if k not in ['Transporte (Base)', 'Nómina', 'Aseo y Limpieza', 'Tecnología', 'Disposición Final']
                 ]).sort_values('Costo', ascending=True)
                 
                 # Subplots Global
@@ -1232,7 +1360,7 @@ DETALLE POR CIUDAD
                                      subplot_titles=("Presupuesto Nacional Macro", "Detalle Materiales Global"))
                 
                 fig_g.add_trace(go.Pie(labels=df_main_g['Rubro'], values=df_main_g['Costo'], hole=0.4,
-                                     marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00']), row=1, col=1)
+                                     marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00', '#28a745', '#6c757d']), row=1, col=1)
                 
                 fig_g.add_trace(go.Bar(x=df_details_g['Costo'], y=df_details_g['Item'], orientation='h',
                                      marker_color='#FF8C00'), row=1, col=2)
@@ -1270,7 +1398,9 @@ DETALLE POR CIUDAD
                     df_main_c = pd.DataFrame([
                         {'Rubro': 'Transporte', 'Costo': res_ciudad['financiero']['Transporte']},
                         {'Rubro': 'Nómina', 'Costo': res_ciudad['financiero']['Nómina']},
-                        {'Rubro': 'Kits de Aseo', 'Costo': res_ciudad['financiero']['Kits de Aseo']},
+                        {'Rubro': 'Aseo y Limpieza', 'Costo': res_ciudad['financiero']['Aseo y Limpieza']},
+                        {'Rubro': 'Tecnología', 'Costo': res_ciudad['financiero']['Tecnología']},
+                        {'Rubro': 'Disposición Final', 'Costo': res_ciudad['financiero']['Disposición Final']},
                         {'Rubro': 'Materiales Ops', 'Costo': costo_mat_c}
                     ])
                     df_details_c = pd.DataFrame([
