@@ -776,24 +776,27 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-st.sidebar.title("🧭 Navegación")
-opcion = st.sidebar.radio(
-    "Seleccione una vista:",
-    ["1. Contexto y EDA", "2. Evaluación Modelos ML", "3. Calculadora de Costos", "4. Cotización Multi-Ciudad"],
-    help="Navegue entre las diferentes secciones del sistema de costeo"
+# Navegación simplificada - Solo sección activa
+st.sidebar.title("🧭 Módulo Activo")
+
+# Opción fija para la única sección visible
+opcion = "4. Cotización Multi-Ciudad"
+
+st.sidebar.markdown(
+    """
+    <div style="background: rgba(0,102,204,0.3); padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0;">
+        <p style="color: #ffffff; margin: 0; font-size: 0.95rem; font-weight: 600;">
+            🌎 Simulador Nacional Multi-Ciudad
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 st.sidebar.markdown("---")
 
-# Indicadores de estado dinámicos según la vista actual
-if "1. Contexto" in opcion:
-    estado_actual = "🔍 Análisis Exploratorio"
-elif "2. Evaluación" in opcion:
-    estado_actual = "🧪 Evaluación de Modelos"
-elif "3. Calculadora" in opcion:
-    estado_actual = "🧮 Calculadora de Costos"
-else:
-    estado_actual = "🌎 Cotización Multi-Ciudad"
+# Estado actual fijo
+estado_actual = "🌎 Cotización Multi-Ciudad"
 
 st.sidebar.markdown(
     f"""
@@ -809,22 +812,24 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-st.sidebar.markdown(
-    """
-    <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
-        <p style="color: #ffffff; margin: 0 0 0.5rem 0; font-weight: 600; font-size: 0.9rem;">📋 Estado del Proyecto:</p>
-        <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Análisis Exploratorio</p>
-        <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Evaluación de Modelos ML</p>
-        <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Implementación Paramétrica</p>
-        <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Cotización Multi-Ciudad</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# st.sidebar.markdown(
+#     """
+#     <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
+#         <p style="color: #ffffff; margin: 0 0 0.5rem 0; font-weight: 600; font-size: 0.9rem;">📋 Funcionalidades:</p>
+#         <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Selección Multi-Ciudad</p>
+#         <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Cálculo Paramétrico</p>
+#         <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Reportes Exportables</p>
+#         <p style="color: #ffffff; margin: 0.3rem 0; font-size: 0.8rem;">✅ Análisis Nacional</p>
+#     </div>
+#     """,
+#     unsafe_allow_html=True
+# )
 
 # ==============================================================================
-# VISTA 1: CONTEXTO Y EDA
+# VISTA 1: CONTEXTO Y EDA (OCULTA)
 # ==============================================================================
+# Sección comentada - No visible en la versión actual
+_hidden_code = '''
 if opcion == "1. Contexto y EDA":
     # Header principal con función reutilizable
     render_header("Análisis Exploratorio y Diagnóstico", "🔍")
@@ -887,9 +892,10 @@ if opcion == "1. Contexto y EDA":
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# VISTA 2: EVALUACIÓN DE MODELOS ML (MEJORADA CON GRÁFICAS)
+# VISTA 2: EVALUACIÓN DE MODELOS ML (OCULTA)
 # ==============================================================================
-elif opcion == "2. Evaluación Modelos ML":
+# Sección comentada - No visible en la versión actual
+# elif opcion == "2. Evaluación Modelos ML":
     # Header principal con función reutilizable
     render_header("Evaluación Visual de la Dificultad", "🧪")
     
@@ -978,9 +984,10 @@ elif opcion == "2. Evaluación Modelos ML":
     """)
 
 # ==============================================================================
-# VISTA 3: CALCULADORA DE COSTOS (ACTUALIZADA CON DESGLOSE DE PERSONAL)
+# VISTA 3: CALCULADORA DE COSTOS (OCULTA)
 # ==============================================================================
-elif opcion == "3. Calculadora de Costos":
+# Sección comentada - No visible en la versión actual
+# elif opcion == "3. Calculadora de Costos":
     # Header principal con función reutilizable
     render_header("Calculadora Paramétrica de Costos", "🧮")
     
@@ -1168,10 +1175,14 @@ elif opcion == "3. Calculadora de Costos":
             if res['financiero']['Transporte'] > res['financiero']['TOTAL_BASE'] * 0.3:
                 st.warning(f"⚠️ **Atención:** El transporte representa una parte muy alta del presupuesto. La variabilidad en el precio de la gasolina o fletes en {ciudad} podría afectar significativamente el margen.")
 
+'''
+# Fin de secciones ocultas
+
 # ==============================================================================
-# VISTA 4: COTIZACIÓN MULTI-CIUDAD
+# VISTA 4: COTIZACIÓN MULTI-CIUDAD (ACTIVA)
 # ==============================================================================
-elif opcion == "4. Cotización Multi-Ciudad":
+# Vista principal - Siempre visible
+if True:  # opcion == "4. Cotización Multi-Ciudad":
     # Header principal con función reutilizable
     render_header("Simulador de Recursos Nacional Multi-Ciudad", "🌎")
     
