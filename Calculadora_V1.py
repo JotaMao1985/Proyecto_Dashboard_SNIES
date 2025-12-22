@@ -10,7 +10,7 @@ import math
 # CONFIGURACIÓN DE LA PÁGINA
 # ==============================================================================
 st.set_page_config(
-    page_title="Sistema de Costeo de Concursos",
+    page_title="Simulador de Costos",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -437,129 +437,169 @@ def get_precio_rango(cantidad, limites, precios):
     elif cantidad <= lim_r2: return p_r2
     else: return p_r3
 
-def obtener_costos_materiales_detallados(n_aspirantes, n_salones, n_sitios, total_staff):
+def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
+    """
+    Calcula los costos desglosados exactamente en las categorías solicitadas.
+    Precios dinámicos basados en Recopilado_Perso.xlsx.
+    """
     
-    # --- 1. DIAGRAMACIÓN (Costo Fijo) ---
-    # Source 2: Valor único en CSV
-    costo_diagramacion = 1599239
+    # 1. INFRAESTRUCTURA (Setup Inicial)
+    # Corresponde a "Diagramación de cuadernillo en formato editorial"
+    # Costo fijo único del proyecto (Source 2)
+    costo_infraestructura = 1599239
     
-    # --- 2. MATERIALES DE APLICACIÓN (Papelería Técnica) ---
-    # Implementación por Rangos (Source 34 y 3)
-    # Rangos CSV Papelería: 0-40, 41-60, >60 unidades
-    limites_papel = (40, 60)
+    # 2. EMPAQUE (Costo - Cantidad)
+    # Empaque individual (Cuadernillo + HR).
+    # Precios dinámicos por volumen de aspirantes (Source 18).
+    # Rangos: 0-1000 | 1001-1500 | >1500
+    lim_asp = (1000, 1500)
+    p_empaque = get_precio_rango(n_aspirantes, lim_asp, (2687, 2598, 2516))
     
-    # Precios (R1, R2, R3) extraídos del CSV
-    p_listados_asist = get_precio_rango(n_salones, limites_papel, (476, 357, 309))
-    p_actas = get_precio_rango(n_salones, limites_papel, (476, 357, 309))
-    p_afiches = get_precio_rango(n_salones, limites_papel, (952, 766, 759))
-    
-    # Rótulos y otros (Usamos R3 conservador si no hay dato de rango claro)
-    p_listado_puerta = 213 
-    p_citacion = 2967
-    p_informes = 279
-    p_formatos = 265
-    p_rotulos = 2674
-    
-    # Cantidades
-    costo_papeleria = (
-        (n_sitios * 4 * p_listado_puerta) +
-        (n_salones * p_listados_asist) +    # Dinámico
-        (n_sitios * p_citacion) +
-        (n_salones * p_actas) +             # Dinámico
-        (n_sitios * 2 * p_informes) +
-        (n_salones * 2 * p_formatos) +
-        (n_salones * 2 * p_afiches) +       # Dinámico
-        (n_sitios * p_rotulos) +
-        (n_salones * p_rotulos)
-    )
+    # Sumamos un pequeño margen para "Empaque materiales adicionales" (Cajas/Tulas)
+    # que no tienen precio en el CSV, estimado en $100 pesos por aspirante.
+    costo_empaque_total = n_aspirantes * (p_empaque + 100)
 
-    # --- 3. KIT DE APLICACIÓN POR SALÓN ---
-    # Source 15: Precio fijo 17,850 en todos los rangos del CSV
-    p_kit_salon = 17850
-    costo_kits_salon = n_salones * p_kit_salon
-
-    # --- 4. CREDENCIALES / ESCARAPELAS ---
-    # Source 16: Rangos 0-60, 61-120, >120 staff
-    p_credencial = get_precio_rango(total_staff, (60, 120), (3570, 3332, 3213))
-    costo_credenciales = total_staff * p_credencial
-
-    # --- 5. PAQUETE DACTILOSCOPISTA ---
-    # Source 17: Precio fijo 33,320 en rangos (Aunque Harmonic Mean era 40k, rangos dicen 33k)
-    # Usaremos 40669 (Harmonic) para ser conservadores ante riesgo de insumos
+    # 3. KIT DACTILOSCOPISTA
+    # Cantidad: 1 por cada 4 salones (aprox)
     n_dactilos = math.ceil(n_salones / 4)
-    p_kit_dactilo = 40669
+    # Precio Harmonic Mean (Source 17) para garantizar cobertura
+    p_kit_dactilo = 40669 
     costo_kit_dactilo = n_dactilos * p_kit_dactilo
 
-    # --- 6. EMPAQUE DEL MATERIAL (Variable Crítica) ---
-    # Source 18: Rangos 0-1000, 1001-1500, >1500
-    limites_asp = (1000, 1500)
-    p_empaque_ind = get_precio_rango(n_aspirantes, limites_asp, (2687, 2598, 2516))
-    
-    # Bolsas/Tulas: Incluidos en tarifa o margen imprevistos
-    costo_empaque_total = n_aspirantes * p_empaque_ind
+    # 4. KIT DE APLICACIÓN (Por Salón)
+    # Marcador, Esfero, Cinta, Lápiz, Borrador (Source 15/39)
+    p_kit_app = 17850
+    costo_kit_app = n_salones * p_kit_app
 
-    # --- 7. EMPAQUE ADICIONAL ---
-    costo_empaque_adic = 0
+    # 5. KIT DE ASEO (Limpieza)
+    # Componentes: Escoba, Trapero, Recogedor, Jabón Polvo, Bolsas.
+    # Cantidad: 1 por cada auxiliar de aseo (1 cada 6 salones)
+    n_personal_aseo = math.ceil(n_salones / 6)
+    # Precios Rango 3 (Volumen):
+    p_aseo = 14278 + 27467 + 12464 + 15635 + 26885 # = $96,729
+    costo_kit_aseo = n_personal_aseo * p_aseo
 
-    # --- 8. PROCESAMIENTO POSTERIOR (Variable Crítica) ---
-    # Source 23 (Lectura): Rangos 0-1000, 1001-1500, >1500
-    # ¡OJO! Aquí la variación es enorme: $11,900 vs $5,439
-    p_lectura = get_precio_rango(n_aspirantes, limites_asp, (11900, 6120, 5439))
-    costo_procesamiento = n_aspirantes * p_lectura
-    
-    # --- VARIABLE IMPRESIÓN (Cuadernillo + HR) ---
-    # Source 2 (Cuadernillo): 5705, 4909, 4744
-    p_cuadernillo = get_precio_rango(n_aspirantes, limites_asp, (5705, 4909, 4744))
-    
-    # Source 2 (HR): 192, 938, 36 (Dato CSV extraño en R2, usamos lógica R1->R3 suavizada)
-    # Ajuste manual para consistencia: 192 -> 150 -> 36
-    if n_aspirantes > 1500: p_hoja_resp = 36
-    else: p_hoja_resp = 192
-        
-    p_acuerdo = 680 # Fijo/Promedio
-    
-    costo_impresion_variable = n_aspirantes * (p_cuadernillo + p_hoja_resp + p_acuerdo)
+    # 6. KIT PARA BAÑOS (Higiene)
+    # Componentes: Papel Higiénico, Toallas de Mano, Jabón Líquido.
+    # Precios Rango 3 (Volumen):
+    p_banos = 3743 + 13807 + 17497 # = $35,047
+    costo_kit_banos = n_personal_aseo * p_banos
 
-    return {
-        'Fijos': {'1. Diagramación': costo_diagramacion},
-        'Variables': {
-            '1. Impresión Variable': costo_impresion_variable,
-            '2. Papelería Técnica': costo_papeleria,
-            '3. Kits Salón': costo_kits_salon,
-            '4. Credenciales': costo_credenciales,
-            '5. Kits Dactiloscopista': costo_kit_dactilo,
-            '6. Empaque Examen': costo_empaque_total,
-            '7. Empaque Adicional': costo_empaque_adic,
-            '8. Lectura y Procesamiento': costo_procesamiento
-        },
-        'Total': costo_diagramacion + costo_impresion_variable + costo_papeleria +
-                 costo_kits_salon + costo_credenciales + costo_kit_dactilo +
-                 costo_empaque_total + costo_empaque_adic + costo_procesamiento
+    # 7. LECTURA (Procesamiento)
+    # Lectura óptica y digitalización (Source 23)
+    # Variable crítica: Baja de $11,900 a $5,439 según volumen.
+    p_lectura = get_precio_rango(n_aspirantes, lim_asp, (11900, 6120, 5439))
+    costo_lectura = n_aspirantes * p_lectura
+
+    # 8. MATERIAL EXAMEN APLICACIÓN (Lo que usa el aspirante)
+    # Cuadernillo + Hoja de Respuesta + Hoja de Operaciones
+    p_cuad = get_precio_rango(n_aspirantes, lim_asp, (5705, 4909, 4744))
+    
+    # Hoja Respuesta (Ajuste de anomalía en CSV Rango 2):
+    if n_aspirantes <= 1000: p_hr = 192
+    elif n_aspirantes <= 1500: p_hr = 150 # Suavizado manual
+    else: p_hr = 36
+    
+    # Hoja de notas (asumimos costo similar a una hoja de respuesta simple o fotocopia)
+    p_notas = 50 
+    
+    costo_mat_examen_app = n_aspirantes * (p_cuad + p_hr + p_notas)
+
+    # 9. MATERIAL EXAMEN EXHIBICIÓN (Documentos legales y copias)
+    # Clave de Respuesta ($978) + Acuerdo Confidencialidad ($680) + Copia HR ($319)
+    p_exhib = 978 + 680 + 319
+    costo_mat_examen_exhib = n_aspirantes * p_exhib
+
+    # 10. MATERIAL APLICACIÓN (Papelería Técnica / Señalización)
+    # Listados, Actas, Afiches, Rótulos, Informes.
+    # Dinámico según cantidad de salones (Rangos 40, 60)
+    lim_papel = (40, 60)
+    
+    # Precios dinámicos (Actas y Listados)
+    p_listados = get_precio_rango(n_salones, lim_papel, (476, 357, 309))
+    p_actas = get_precio_rango(n_salones, lim_papel, (476, 357, 309))
+    p_afiches = get_precio_rango(n_salones, lim_papel, (952, 766, 759))
+    
+    # Precios fijos/promedio (Rótulos, Informes)
+    p_rotulos = 2674
+    p_informes = 279
+    p_puerta = 213
+    
+    costo_material_app = (
+        (n_sitios * 4 * p_puerta) +         # Listados Puerta
+        (n_salones * p_listados) +          # Listados Asistencia
+        (n_salones * p_actas) +             # Actas Sesión
+        (n_sitios * 2 * p_informes) +       # Informes Delegado/Coord
+        (n_salones * 2 * p_afiches) +       # Afiches (Prohibido/Tiempos)
+        (n_sitios * p_rotulos) +            # Rótulo Sitio
+        (n_salones * p_rotulos)             # Rótulo Salón
+    )
+
+    # 11. CREDENCIALES (Parte de Material Aplicación o Exhibición según se vea)
+    # Lo separamos para claridad pero se suma al total de materiales
+    p_cred = get_precio_rango(total_staff, (60, 120), (3570, 3332, 3213))
+    costo_credenciales = total_staff * p_cred
+
+    # --- DISPOSICIÓN FINAL ---
+    # Custodia y Destrucción (Source Final CSV)
+    if n_aspirantes > 1000: p_cust = 486818; p_dest = 1428
+    else: p_cust = 194727; p_dest = 2618
+    costo_disposicion = (p_cust * 2) + (n_aspirantes * p_dest)
+
+    # SUMA TOTAL DE MATERIALES E INSUMOS
+    # Nota: No sumamos Nómina ni Transporte aquí, eso va en la función principal
+    total_general_materiales = (
+        costo_infraestructura + costo_empaque_total + costo_kit_dactilo +
+        costo_kit_app + costo_kit_aseo + costo_kit_banos + costo_lectura +
+        costo_mat_examen_app + costo_mat_examen_exhib + costo_material_app +
+        costo_credenciales + costo_disposicion
+    )
+
+    return total_general_materiales, {
+        'Infraestructura (Diagramación)': costo_infraestructura,
+        'Empaque': costo_empaque_total,
+        'Kit Dactiloscopista': costo_kit_dactilo,
+        'Kit de aplicación': costo_kit_app,  # Validado: Insumos de aula (Marcador, Cinta, etc.) por Salón
+        'Kit de aseo': costo_kit_aseo,
+        'Kit para baños': costo_kit_banos,
+        'Lectura': costo_lectura,
+        'Material examen aplicación': costo_mat_examen_app,
+        'Material examen exhibición': costo_mat_examen_exhib,
+        'Material aplicación (Papelería)': costo_material_app + costo_credenciales, # Sumamos credenciales aquí
+        'Disposición Final': costo_disposicion
     }
 
 def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0):
+    """
+    Calcula el presupuesto total integrando Logística, Nómina, Materiales (8 Cats),
+    Tecnología, Aseo y Transporte.
+    """
     
-    # --- A. MOTOR LÓGICO (Cálculo de Cantidades) ---
+    # --- A. MOTOR LÓGICO (INFRAESTRUCTURA) ---
+    # Reglas base: 1 sitio x 500 pax, 1 salón x 25 pax
     n_sitios = math.ceil(n_aspirantes / 500)
     n_salones = math.ceil(n_aspirantes / 25) 
     
-    # Reglas de Staff según Modalidad
-    if tipo_prueba == "Virtual":
-        div_coord = 4           # Virtual: 1 Coord cada 4 salones (Más supervisión)
-        mul_jefe = 2            # Virtual: 2 Jefes por salón
-        n_custodia = 0          # Virtual: No requiere delegado custodia
-        n_ing = n_sitios        # Virtual: 1 Ingeniero por sitio (Obligatorio)
+    # --- B. PERSONAL LOGÍSTICO (CANTIDADES Y COSTOS) ---
+    # Definición de reglas según modalidad
+    if "Virtual" in tipo_prueba:
+        div_coord = 4           # Mayor supervisión (1 coord x 4 salones)
+        mul_jefe = 2            # Doble control (2 jefes x salón)
+        n_custodia = 0          # No aplica en virtual
+        n_ing = n_sitios        # 1 Ingeniero por sitio obligatorio
+        # Riesgo mayor en virtual por fallos técnicos
+        factor_riesgo = 1.15    
     else:
-        div_coord = 6           # Escrita: 1 Coord cada 6 salones
-        mul_jefe = 1            # Escrita: 1 Jefe por salón
-        n_custodia = n_sitios   # Escrita: 1 Delegado custodia por sitio
-        n_ing = 0               # Escrita: No requiere ingeniero
-        requiere_alquiler = False # Forzamos False si es escrita
-        
+        div_coord = 6           # Estándar (1 coord x 6 salones)
+        mul_jefe = 1            # Estándar (1 jefe x salón)
+        n_custodia = n_sitios   # 1 Custodio por sitio (Papel)
+        n_ing = 0               # No requiere ingeniero
+        requiere_alquiler = False # Forzamos apagado de alquiler
+        factor_riesgo = 1.10
+
+    # Cálculo de cantidades de Staff
     n_coord_aula = math.ceil(n_salones / div_coord)
     n_jefes_salon = n_salones * mul_jefe
-    
-    # Staff Común
     n_aseo = math.ceil(n_salones / 6)
     n_orientadores = math.ceil(n_salones / 6)
     n_dactilo = math.ceil(n_salones / 4)
@@ -568,8 +608,7 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alqu
     n_enfermeros = n_sitios
     n_seguridad = n_sitios * 2
 
-    # --- B. CÁLCULO NÓMINA ---
-    # Tarifas base 
+    # Lista de Nómina con Tarifas (Source 63-65 CSV)
     detalle_nomina = [
         {'Cargo': 'Delegado Prueba', 'Cant': n_delegado_prueba, 'Val': 300000},
         {'Cargo': 'Delegado Custodia', 'Cant': n_custodia, 'Val': 300000},
@@ -583,67 +622,106 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alqu
         {'Cargo': 'Seguridad', 'Cant': n_seguridad, 'Val': 200000},
         {'Cargo': 'Enfermería', 'Cant': n_enfermeros, 'Val': 200000}
     ]
-    # Filtrar y sumar
+    
+    # Filtrar roles en 0 y calcular totales
     detalle_nomina = [d for d in detalle_nomina if d['Cant'] > 0]
     total_nomina = sum([d['Cant'] * d['Val'] for d in detalle_nomina])
     total_staff = sum([d['Cant'] for d in detalle_nomina])
 
-    # --- C. MATERIALES (8 Categorías Detalladas) ---
-    # Llama a la función que usa rangos para lectura óptica, empaques, etc.
-    res_materiales = obtener_costos_materiales_detallados(n_aspirantes, n_salones, n_sitios, total_staff)
-    total_materiales = res_materiales['Total']
+    # --- C. MATERIALES DETALLADOS (8 CATEGORÍAS) ---
+    # Llamada a la función auditada que devuelve el costo total y el desglose
+    total_materiales_general, desglose_mat = obtener_detalles_materiales(
+        n_aspirantes, n_salones, n_sitios, total_staff
+    )
 
-    # --- D. INSUMOS DE ASEO Y LIMPIEZA ---
-    # Kit Aseo calculado por Rango 3 ($131,864)
-    total_kits_aseo = n_aseo * 131864
-
-    # --- E. DISPOSICIÓN FINAL (Custodia + Destrucción) ---
-    res_disposicion = obtener_costos_disposicion_final(n_aspirantes)
-    total_disposicion = res_disposicion['Total']
-
-    # --- F. ALQUILER DE TECNOLOGÍA (Si aplica) ---
-    # --- F. ALQUILER DE TECNOLOGÍA (Si aplica) ---
-    res_tecnologia = obtener_costos_tecnologia(n_equipos_alquiler, n_sitios, requiere_alquiler)
-    total_tecnologia = res_tecnologia['Total']
-
-    # --- G. TRANSPORTE Y LOGÍSTICA ---
-    # Función dinámica (27 ciudades x 3 rangos)
-    costo_transporte = obtener_costo_transporte(ciudad, n_aspirantes)
-
-    # --- H. CONSOLIDACIÓN FINAL ---
-    total_proyecto = (total_nomina + total_materiales + total_kits_aseo + 
-                      total_disposicion + total_tecnologia + costo_transporte)
+    # --- D. KITS DE ASEO Y BAÑOS ---
+    # Calculados por separado para visibilidad (Precios Rango 3)
+    p_kit_limpieza = 96729  # Escoba, trapero, jabón polvo, bolsas...
+    p_kit_banos = 35047     # Papel, toallas, jabón manos...
     
-    # Intervalos de Riesgo
-    factor_riesgo = 1.10 # 10% imprevistos
-    if tipo_prueba == "Virtual": factor_riesgo = 1.15 # Mayor riesgo tecnológico
+    total_kit_limpieza = n_aseo * p_kit_limpieza
+    total_kit_banos = n_aseo * p_kit_banos
 
+    # --- E. ALQUILER DE TECNOLOGÍA (Variable Manual) ---
+    # Llama a la función de rangos tecnológicos
+    res_tech = obtener_costos_tecnologia(n_equipos_alquiler, n_sitios, requiere_alquiler)
+    total_tech = res_tech['Total']
+
+    # --- F. TRANSPORTE Y DISTRIBUCIÓN ---
+    # Llama a la función de 27 ciudades x 3 rangos
+    total_transporte = obtener_costo_transporte(ciudad, n_aspirantes)
+
+    # --- G. CONSOLIDACIÓN DE TOTALES ---
+    # Suma de todos los componentes mayores
+    total_proyecto = (
+        total_nomina + 
+        total_materiales_general + # Incluye las 8 categorías + Disposición Final
+        total_kit_limpieza + 
+        total_kit_banos + 
+        total_tech + 
+        total_transporte
+    )
+    
+    # Intervalos de confianza (Presupuesto sugerido)
+    total_min = total_proyecto * 0.95
+    total_max = total_proyecto * factor_riesgo
+
+    # --- RETORNO DE ESTRUCTURA DE DATOS ---
     return {
+        # 1. Datos Físicos
         'logistica': {
             'Sitios': n_sitios, 
             'Salones': n_salones, 
             'Staff Total': total_staff,
-            'PCs Alquilados (Base+Backup)': res_tecnologia['Detalle'].get('Total Equipos Facturados', 0)
+            'PCs Alquilados': res_tech['Detalle'].get('Total Equipos Facturados', 0)
         },
-        'detalle_nomina': [{'Cargo': d['Cargo'], 'Cantidad': d['Cant'], 'Tarifa': d['Val'], 'Subtotal': d['Cant']*d['Val']} for d in detalle_nomina],
-        'desglose_materiales': res_materiales['Variables'],
-        'costos_fijos': res_materiales['Fijos'],
+        
+        # 2. Detalle Nómina (Lista para DataFrame)
+        'detalle_nomina': [
+            {'Cargo': d['Cargo'], 'Cantidad': d['Cant'], 'Tarifa': d['Val'], 'Subtotal': d['Cant']*d['Val']} 
+            for d in detalle_nomina
+        ],
+        
+        # 3. Desglose Financiero (Claves exactas para el Reporte)
         'financiero': {
-            'Transporte': costo_transporte,
-            'Nómina': total_nomina,
-            'Materiales': total_materiales,
-            'Tecnología': total_tecnologia,
-            'Aseo y Limpieza': total_kits_aseo,
-            'Disposición Final': total_disposicion,
+            # Bloque Personal
+            'Personal Logístico': total_nomina,
+            
+            # Bloque Infraestructura y Tecnología
+            'Infraestructura (Diagramación)': desglose_mat['Infraestructura (Diagramación)'],
+            'Tecnología (Alquiler PC)': total_tech,
+            
+            # Bloque Materiales Examen
+            'Material Examen Aplicación': desglose_mat['Material examen aplicación'],
+            'Material Examen Exhibición': desglose_mat['Material examen exhibición'],
+            'Lectura y Procesamiento': desglose_mat['Lectura'],
+            
+            # Bloque Logística de Sitio
+            'Material Aplicación (Papelería)': desglose_mat['Material aplicación (Papelería)'],
+            'Kit de Aplicación': desglose_mat['Kit de aplicación'],
+            'Kit Dactiloscopista': desglose_mat['Kit Dactiloscopista'],
+            'Kit de Aseo': total_kit_limpieza,
+            'Kit para Baños': total_kit_banos,
+            
+            # Bloque Distribución
+            'Empaque': desglose_mat['Empaque'],
+            'Transporte y Distribución': total_transporte,
+            'Disposición Final': desglose_mat['Disposición Final'],
+            
+            # TOTAL
             'TOTAL_BASE': total_proyecto
         },
-        'intervalo': {
-            'min': total_proyecto * 0.95,
-            'max': total_proyecto * factor_riesgo,
-            'gap': (total_proyecto * factor_riesgo) - (total_proyecto * 0.95)
-        },
+        
+        # 4. Indicadores Unitarios
         'unitario': total_proyecto / n_aspirantes,
-        'unitario_max': (total_proyecto * factor_riesgo) / n_aspirantes
+        'unitario_max': total_max / n_aspirantes,
+        
+        # 5. Rangos de Riesgo
+        'intervalo': {
+            'min': total_min,
+            'max': total_max,
+            'gap': total_max - total_min
+        }
     }
 
 # ==============================================================================
@@ -916,15 +994,15 @@ elif opcion == "3. Calculadora de Costos":
         with col3:
             prueba = st.radio(
                 "Modalidad", 
-                ["Escrita", "Virtual"],
-                help="Escrita: requiere más jefes de salón. Virtual: menor personal pero mayor infraestructura tecnológica."
+                ["Escrita presencial - Material impreso", "Escrita presencial - Virtual en ambiente controlado"],
+                help="Escrita presencial - Material impreso: requiere más jefes de salón. Escrita presencial - Virtual en ambiente controlado: menor personal pero mayor infraestructura tecnológica."
             )
             
             # Checkbox condicional: Solo aparece si es Virtual
             use_alquiler = False
             cantidad_equipos = 0
             
-            if prueba == "Virtual":
+            if "Virtual" in prueba:
                 use_alquiler = st.checkbox("¿Requiere Alquiler de PCs?", help="Active si necesita rentar equipos.")
                 
                 if use_alquiler:
@@ -1065,7 +1143,7 @@ elif opcion == "3. Calculadora de Costos":
 # ==============================================================================
 elif opcion == "4. Cotización Multi-Ciudad":
     # Header principal con función reutilizable
-    render_header("Cotizador Nacional Multi-Ciudad", "🌎")
+    render_header("Simulador de Recursos Nacional Multi-Ciudad", "🌎")
     
     # Info card con instrucciones
     st.markdown(
@@ -1095,32 +1173,69 @@ elif opcion == "4. Cotización Multi-Ciudad":
     )
     
     if ciudades_sel:
-        # 2. Configuración de Aspirantes (Data Editor)
+        # 2. Configuración Global de Modalidad
+        st.subheader("⚙️ Configuración del Operativo")
+        
+        col_global_1, col_global_2 = st.columns(2)
+        with col_global_1:
+            modalidad_global = st.radio(
+                "Modalidad General", 
+                ["Escrita presencial - Material impreso", "Escrita presencial - Virtual en ambiente controlado"],
+                horizontal=True,
+                help="La modalidad aplica para todas las ciudades seleccionadas. Escrita requiere más personal, Virtual requiere más tecnología."
+            )
+        
+        # 3. Configuración de Aspirantes (Data Editor)
         st.subheader("📋 Asignación de Aspirantes por Ciudad")
         
-        # Crear DF inicial
-        df_input = pd.DataFrame({
-            'Ciudad': ciudades_sel,
-            'Aspirantes': [500] * len(ciudades_sel), # Valor por defecto
-            'Modalidad': ["Escrita"] * len(ciudades_sel)
-        })
+        # Detectar si es virtual para habilitar opcion de equipos
+        es_virtual = "Virtual" in modalidad_global
         
+        # Datos base
+        data_base = {
+            'Ciudad': ciudades_sel,
+            'Aspirantes': [500] * len(ciudades_sel),
+            'Discapacitados': [0] * len(ciudades_sel)
+        }
+        
+        # Si es virtual, agregamos columna de equipos (default 1:1)
+        if es_virtual:
+            data_base['Equipos'] = [500] * len(ciudades_sel)
+            
+        # Crear DF inicial
+        df_input = pd.DataFrame(data_base)
+        
+        # Configuración de columnas base
+        col_config = {
+            "Aspirantes": st.column_config.NumberColumn(
+                "N° Aspirantes",
+                min_value=1,
+                max_value=100000,
+                step=10,
+            ),
+            "Discapacitados": st.column_config.NumberColumn(
+                "Personas con Discapacidad",
+                min_value=0,
+                max_value=100000, 
+                step=1,
+                help="Número de aspirantes que requieren condiciones especiales (movilidad, visual, auditiva, etc.)"
+            )
+        }
+        
+        # Configuración condicional para equipos
+        if es_virtual:
+            col_config["Equipos"] = st.column_config.NumberColumn(
+                "Equipos de Cómputo",
+                min_value=0,
+                max_value=100000,
+                step=1,
+                help="Cantidad de computadores a alquilar"
+            )
+
         # Editor
         edited_df = st.data_editor(
             df_input,
-            column_config={
-                "Aspirantes": st.column_config.NumberColumn(
-                    "N° Aspirantes",
-                    min_value=1,
-                    max_value=100000,
-                    step=10,
-                ),
-                "Modalidad": st.column_config.SelectboxColumn(
-                    "Modalidad",
-                    options=["Escrita", "Virtual"],
-                    required=True,
-                )
-            },
+            column_config=col_config,
             hide_index=True,
             use_container_width=True
         )
@@ -1140,10 +1255,19 @@ elif opcion == "4. Cotización Multi-Ciudad":
             for idx, row in enumerate(edited_df.itertuples()):
                 ciudad_iter = row.Ciudad
                 asp_iter = row.Aspirantes
-                mod_iter = row.Modalidad
+                discap_iter = getattr(row, 'Discapacitados', 0)
+                equipos_iter = getattr(row, 'Equipos', 0) if es_virtual else 0
+                
+                # Usar modalidad global
+                mod_iter = modalidad_global
+                
+                # Determinamos parámetros de alquiler para esta ciudad
+                # Si es virtual, asumimos que requiere alquiler si equipos > 0
+                req_alquiler = es_virtual and (equipos_iter > 0)
                 
                 # Calcular usando la función existente
-                res = calcular_modelo_parametrico(asp_iter, ciudad_iter, mod_iter)
+                # calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0)
+                res = calcular_modelo_parametrico(asp_iter, ciudad_iter, mod_iter, requiere_alquiler=req_alquiler, n_equipos_alquiler=equipos_iter)
                 
                 # Acumular
                 costo_base = res['financiero']['TOTAL_BASE']
@@ -1155,6 +1279,8 @@ elif opcion == "4. Cotización Multi-Ciudad":
                 resultados_lista.append({
                     'Ciudad': ciudad_iter,
                     'Aspirantes': asp_iter,
+                    'Discapacitados': discap_iter,
+                    'Equipos': equipos_iter,
                     'Modalidad': mod_iter,
                     'Costo Total': costo_base,
                     'Costo Unitario': res['unitario'],
@@ -1164,10 +1290,30 @@ elif opcion == "4. Cotización Multi-Ciudad":
                     'full_res': res # Guardar resultado completo para evitar recálculos
                 })
                 
-                # Actualizar barra
+            # Actualizar barra
                 my_bar.progress((idx + 1) / len(edited_df), text=progress_text)
                 
             my_bar.empty()
+            
+            # --- GUARDAR EN SESSION STATE ---
+            st.session_state['mc_resultados'] = resultados_lista
+            st.session_state['mc_total'] = total_global
+            st.session_state['mc_total_min'] = total_min_global
+            st.session_state['mc_total_max'] = total_max_global
+            st.session_state['mc_aspirantes'] = total_aspirantes
+            st.session_state['mc_es_virtual'] = es_virtual # Guardar contexto
+            
+        # --- RENDERIZADO PERSISTENTE ---
+        if 'mc_resultados' in st.session_state:
+            # Recuperar datos
+            resultados_lista = st.session_state['mc_resultados']
+            total_global = st.session_state['mc_total']
+            total_min_global = st.session_state['mc_total_min']
+            total_max_global = st.session_state['mc_total_max']
+            total_aspirantes = st.session_state['mc_aspirantes']
+            # Usar variable guardada o actual si coincide lógica, pero mejor usar la guardada para consistencia
+            # Sin embargo, 'es_virtual' viene del input actual. Si el usuario cambia inputs pero no recalcula, puede haber mismatch.
+            # Asumiremos que si hay resultados, mostramos esos resultados.
             
             st.divider()
             
@@ -1184,6 +1330,29 @@ elif opcion == "4. Cotización Multi-Ciudad":
                 if total_aspirantes > 0:
                     promedio_unitario = total_global / total_aspirantes
                     st.metric("Costo Promedio / Aspirante", f"${promedio_unitario:,.0f}")
+            
+            st.caption("**Fuente:** ESTUDIO DE MERCADO - CONCURSO MERITOS, ESAP 2025")
+            
+            # --- KPIs ESPECÍFICOS VIRTUAL ---
+            if st.session_state.get('mc_es_virtual', False):
+                st.divider()
+                st.markdown("#### 💻 Indicadores de Infraestructura Tecnológica")
+                
+                kv1, kv2, kv3 = st.columns(3)
+                
+                # Calcular totales
+                total_equipos_pc = sum(r.get('Equipos', 0) for r in resultados_lista)
+                # FIX: Usar .get() y la nueva clave 'Tecnología (Alquiler PC)' o 'Tecnología' si existiera
+                total_costo_tech = sum(r['full_res']['financiero'].get('Tecnología (Alquiler PC)', 0) for r in resultados_lista)
+                
+                with kv1:
+                    st.metric("Total Equipos a Alquilar", f"{total_equipos_pc:,.0f}")
+                with kv2:
+                    st.metric("Costo Tecnología", f"${total_costo_tech:,.0f}")
+                with kv3:
+                    if total_aspirantes > 0 and total_equipos_pc > 0:
+                        ratio_pc = total_equipos_pc / total_aspirantes
+                        st.metric("Ratio Equipos/Aspirante", f"{ratio_pc:.2f}")
             
             # --- INTERVALO DE CONFIANZA ---
             st.markdown(
@@ -1212,14 +1381,18 @@ elif opcion == "4. Cotización Multi-Ciudad":
             st.subheader("📍 Desglose por Ciudad")
             df_res = pd.DataFrame(resultados_lista)
             if 'full_res' in df_res.columns:
-                df_res = df_res.drop(columns=['full_res'])
+                df_res_view = df_res.drop(columns=['full_res'])
+            else:
+                df_res_view = df_res
             
             # Formato condicional para resaltar costos altos
-            st.dataframe(
-                df_res.style.format({
+                st.dataframe(
+                df_res_view.style.format({
                     'Costo Total': '${:,.0f}',
                     'Costo Unitario': '${:,.0f}',
-                    'Aspirantes': '{:,.0f}'
+                    'Aspirantes': '{:,.0f}',
+                    'Discapacitados': '{:,.0f}',
+                    'Equipos': '{:,.0f}'
                 }).background_gradient(subset=['Costo Total'], cmap='Blues'),
                 use_container_width=True,
                 hide_index=True
@@ -1231,7 +1404,7 @@ elif opcion == "4. Cotización Multi-Ciudad":
             
             with col_download1:
                 # Convertir a CSV para descargar
-                csv = df_res.to_csv(index=False).encode('utf-8')
+                csv = df_res_view.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="📥 Descargar CSV",
                     data=csv,
@@ -1242,41 +1415,208 @@ elif opcion == "4. Cotización Multi-Ciudad":
                 )
             
             with col_download2:
-                # Generar reporte en texto para "PDF" (simulado como TXT formateado)
-                reporte_txt = f"""REPORTE DE COTIZACIÓN NACIONAL - ESAP
-{'='*50}
-Fecha de Generación: Diciembre 2025
-{'='*50}
-
-RESUMEN EJECUTIVO
------------------
-Costo Total Operativo: ${total_global:,.0f}
-Total Aspirantes: {total_aspirantes:,.0f}
-Costo Promedio/Aspirante: ${total_global/total_aspirantes:,.0f}
-
-RANGO PRESUPUESTAL
-------------------
-Escenario Optimista: ${total_min_global:,.0f}
-Escenario Conservador: ${total_max_global:,.0f}
-
-DETALLE POR CIUDAD
-------------------
-"""
+                # Generar reporte HTML Profesional
+                
+                # 1. Estilos CSS
+                estilos_css = """
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+                    .header { background: linear-gradient(135deg, #003366 0%, #004080 100%); color: white; padding: 40px 20px; text-align: center; border-bottom: 5px solid #FF8C00; }
+                    .header h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; }
+                    .header p { margin: 10px 0 0 0; font-size: 16px; opacity: 0.9; }
+                    .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+                    .section-title { color: #003366; border-bottom: 2px solid #FF8C00; padding-bottom: 10px; margin-top: 40px; margin-bottom: 20px; font-weight: bold; font-size: 20px; }
+                    
+                    /* Tablas */
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+                    th { background-color: #003366; color: white; padding: 15px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 14px; }
+                    td { padding: 12px 15px; border-bottom: 1px solid #eee; font-size: 14px; }
+                    tr:nth-child(even) { background-color: #f8f9fa; }
+                    tr:hover { background-color: #f1f1f1; }
+                    
+                    /* Summary Box */
+                    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+                    .kpi-card { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 5px solid #003366; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+                    .kpi-label { font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+                    .kpi-value { font-size: 24px; font-weight: bold; color: #003366; margin-top: 5px; }
+                    
+                    /* Rangos */
+                    .range-box { padding: 15px; border-radius: 8px; margin-top: 20px; background: linear-gradient(to right, rgba(40,167,69,0.1), rgba(220,53,69,0.1)); border: 1px solid #ddd; text-align: center; }
+                    .range-title { font-weight: bold; color: #333; margin-bottom: 10px; }
+                    .range-values { font-size: 18px; }
+                    .val-min { color: #28a745; font-weight: bold; }
+                    .val-max { color: #dc3545; font-weight: bold; }
+                    
+                    .footer { text-align: center; margin-top: 50px; padding: 20px; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+                </style>
+                """
+                
+                # 2. Construcción del HTML
+                
+                # A. Tabla Resumen General
+                html_rows = ""
                 for _, row in df_res.iterrows():
-                    reporte_txt += f"\n{row['Ciudad']}:\n"
-                    reporte_txt += f"  - Aspirantes: {row['Aspirantes']:,.0f}\n"
-                    reporte_txt += f"  - Costo Total: ${row['Costo Total']:,.0f}\n"
-                    reporte_txt += f"  - Costo Unitario: ${row['Costo Unitario']:,.0f}\n"
+                    # Usar valor guardado en row si posible, o fallback
+                    equipos_val = f"{row.get('Equipos', 0):,.0f}" if st.session_state.get('mc_es_virtual', False) else "N/A"
+                    html_rows += f"""
+                    <tr>
+                        <td style="font-weight: bold;">{row['Ciudad']}</td>
+                        <td>{row['Aspirantes']:,.0f}</td>
+                        <td>{row['Discapacitados']:,.0f}</td>
+                        <td>{equipos_val}</td>
+                        <td>${row['Costo Unitario']:,.0f}</td>
+                        <td style="font-weight: bold; color: #003366;">${row['Costo Total']:,.0f}</td>
+                    </tr>
+                    """
+
+                # B. Bloques Detallados por Ciudad
+                html_detalles = ""
+                for item in resultados_lista:
+                    res_c = item['full_res']
+                    nombre_c = item['Ciudad']
+                    total_c = res_c['financiero']['TOTAL_BASE']
+                    
+                    # KPIs Logísticos
+                    sitios_c = res_c['logistica']['Sitios']
+                    salones_c = res_c['logistica']['Salones']
+                    staff_c = sum([x['Cantidad'] for x in res_c['detalle_nomina']])
+                    # Evitar div por cero si aspirantes es 0 (raro pero posible)
+                    asp_c = item['Aspirantes'] if item['Aspirantes'] > 0 else 1
+                    
+                    # CORRECCIÓN: Usar clave nueva para "Impresión" (Material Examen Aplicación)
+                    # Antes: '1. Impresión Variable' -> Ahora: 'Material Examen Aplicación'
+                    imp_unit_c = res_c['financiero'].get('Material Examen Aplicación', 0) / asp_c
+                    
+                    # Tabla Financiera
+                    # Recalcular costo materiales (suma de claves específicas de materiales en 'financiero' o usar 'Materiales' si existiera, 
+                    # pero la nueva estructura pone todo en 'financiero')
+                    
+                    # Claves de materiales en el nuevo 'financiero'
+                    keys_materiales = [
+                        'Infraestructura (Diagramación)', 'Material Examen Aplicación', 'Material Examen Exhibición',
+                        'Lectura y Procesamiento', 'Material Aplicación (Papelería)', 'Kit de Aplicación', 
+                        'Kit Dactiloscopista', 'Empaque', 'Disposición Final'
+                    ]
+                    costo_mat_c = sum(res_c['financiero'].get(k, 0) for k in keys_materiales)
+
+                    rows_fin = [
+                        ('Transporte', res_c['financiero'].get('Transporte y Distribución', 0)),
+                        ('Nómina', res_c['financiero'].get('Personal Logístico', 0)),
+                        ('Tecnología', res_c['financiero'].get('Tecnología (Alquiler PC)', 0)),
+                        ('Materiales', costo_mat_c),
+                        ('Aseo y Limpieza', res_c['financiero'].get('Kit de Aseo', 0) + res_c['financiero'].get('Kit para Baños', 0)),
+                        # Disposición Final ya está en materiales en este nuevo esquema, o lo separamos si se prefiere
+                        # La dejaremos en materiales para simplificar la tabla resumen
+                    ]
+                    
+                    html_rows_fin = ""
+                    for concepto, valor in rows_fin:
+                        if valor > 0:
+                            pct = (valor / total_c) * 100
+                            html_rows_fin += f"<tr><td>{concepto}</td><td>${valor:,.0f}</td><td>{pct:.1f}%</td></tr>"
+                    
+                    html_detalles += f"""
+                    <div style="margin-bottom: 30px; border: 1px solid #ddd; padding: 20px; border-radius: 8px; background: white;">
+                        <div style="border-bottom: 2px solid #ddd; margin-bottom: 15px; padding-bottom: 10px;">
+                            <span style="font-size: 18px; font-weight: bold; color: #003366;">{nombre_c}</span>
+                            <span style="float: right; font-weight: bold; color: #28a745; font-size: 18px;">Total: ${total_c:,.0f}</span>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                            <div style="text-align: center;"><div style="font-size: 12px; color: #666;">SITIOS</div><div style="font-weight: bold; font-size: 16px;">{sitios_c}</div></div>
+                            <div style="text-align: center;"><div style="font-size: 12px; color: #666;">SALONES</div><div style="font-weight: bold; font-size: 16px;">{salones_c}</div></div>
+                            <div style="text-align: center;"><div style="font-size: 12px; color: #666;">STAFF</div><div style="font-weight: bold; font-size: 16px;">{staff_c}</div></div>
+                            <div style="text-align: center;"><div style="font-size: 12px; color: #666;">TARIFA IMP.</div><div style="font-weight: bold; font-size: 16px;">${imp_unit_c:,.0f}</div></div>
+                        </div>
+                        
+                        <table style="width: 100%; font-size: 13px;">
+                            <thead style="background: #eee;">
+                                <tr><th style="padding: 8px; background: #eee; color: #333;">Concepto</th><th style="padding: 8px; background: #eee; color: #333;">Costo</th><th style="padding: 8px; background: #eee; color: #333;">%</th></tr>
+                            </thead>
+                            <tbody>
+                                {html_rows_fin}
+                            </tbody>
+                        </table>
+                    </div>
+                    """
                 
-                reporte_txt += f"\n{'='*50}\nGenerado por Sistema de Costeo ESAP v1.0\n"
-                
+                reporte_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Reporte de Costeo ESAP</title>
+                    {estilos_css}
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>Reporte de Cotización Nacional</h1>
+                        <p>ESAP - Simulador de Costos</p>
+                    </div>
+                    
+                    <div class="container">
+                        <div class="section-title">📊 Resumen Ejecutivo</div>
+                        
+                        <div class="summary-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Costo Total Operativo</div>
+                                <div class="kpi-value">${total_global:,.0f}</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Total Aspirantes</div>
+                                <div class="kpi-value">{total_aspirantes:,.0f}</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Promedio por Aspirante</div>
+                                <div class="kpi-value">${total_global/total_aspirantes:,.0f}</div>
+                            </div>
+                        </div>
+
+                        <div class="range-box">
+                            <div class="range-title">💡 Rango Presupuestal Sugerido</div>
+                            <div class="range-values">
+                                <span class="val-min">${total_min_global:,.0f} (Optimista)</span>
+                                &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+                                <span class="val-max">${total_max_global:,.0f} (Conservador)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="section-title">📍 Resumen por Ciudad</div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Ciudad</th>
+                                    <th>Aspirantes</th>
+                                    <th>Discapacitados</th>
+                                    <th>Equipos PC</th>
+                                    <th>Cost. Unitario</th>
+                                    <th>Cost. Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {html_rows}
+                            </tbody>
+                        </table>
+                        
+                        <div class="section-title">🏙️ Análisis Detallado por Ciudad</div>
+                        {html_detalles}
+                        
+                        <div class="footer">
+                            Generado automáticamente por el Simulador de Costos ESAP<br>
+                            Fecha: Diciembre 2025
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+
                 st.download_button(
-                    label="📄 Descargar Reporte (TXT)",
-                    data=reporte_txt.encode('utf-8'),
-                    file_name='reporte_cotizacion_esap.txt',
-                    mime='text/plain',
+                    label="📄 Descargar Reporte (HTML)",
+                    data=reporte_html.encode('utf-8'),
+                    file_name='reporte_cotizacion_esap.html',
+                    mime='text/html',
                     use_container_width=True,
-                    help="Descarga un reporte ejecutivo en formato texto"
+                    help="Descarga un reporte profesional en formato HTML"
                 )
 
             st.divider()
@@ -1322,37 +1662,54 @@ DETALLE POR CIUDAD
                 # Agrupar costos globales
                 costos_globales = {} # Rubro -> Costo
                 
+                # Definir claves principales nuevas
+                KEY_TRANS = 'Transporte y Distribución'
+                KEY_NOMINA = 'Personal Logístico'
+                KEY_TECH = 'Tecnología (Alquiler PC)'
+                
                 for item in resultados_lista:
                     res_temp = item['full_res']
+                    fin = res_temp['financiero']
                     
-                    # Agregar componentes principales
-                    costos_globales['Transporte (Base)'] = costos_globales.get('Transporte (Base)', 0) + res_temp['financiero']['Transporte']
-                    costos_globales['Nómina'] = costos_globales.get('Nómina', 0) + res_temp['financiero']['Nómina']
-                    costos_globales['Aseo y Limpieza'] = costos_globales.get('Aseo y Limpieza', 0) + res_temp['financiero']['Aseo y Limpieza']
-                    costos_globales['Tecnología'] = costos_globales.get('Tecnología', 0) + res_temp['financiero']['Tecnología']
-                    costos_globales['Disposición Final'] = costos_globales.get('Disposición Final', 0) + res_temp['financiero']['Disposición Final']
-                    
-                    # Agregar materiales detallados
-                    for k, v in res_temp['desglose_materiales'].items():
-                        costos_globales[k] = costos_globales.get(k, 0) + v
-                
-                # Convertir a DF
-                # --- VISUALIZACIÓN GLOBAL COMPUESTA (PIE + BAR) ---
+                    # Agregación atómica (guardamos cada rubro individualmente)
+                    for k, v in fin.items():
+                        if k == 'TOTAL_BASE': continue
+                        
+                        # Estandarizar Nombres Principales para Agrupación
+                        if k == KEY_TRANS: key_target = 'Transporte'
+                        elif k == KEY_NOMINA: key_target = 'Nómina'
+                        elif k == KEY_TECH: key_target = 'Tecnología'
+                        elif k == 'Disposición Final': key_target = 'Disposición Final'
+                        else: key_target = k # Mantener nombre original (ej: Kits, Papelería, etc.)
+                        
+                        costos_globales[key_target] = costos_globales.get(key_target, 0) + v
+
+                # --- VISUALIZACIÓN GLOBAL ---
                 total_costos = sum(costos_globales.values())
-                total_materiales_glob = sum([v for k, v in costos_globales.items() if k not in ['Transporte (Base)', 'Nómina', 'Aseo y Limpieza', 'Tecnología', 'Disposición Final']])
+                
+                # 1. Agrupar para Pie Chart (Resumido)
+                # Aquí sumamos explícitamente los kits de aseo en una sola rebanada
+                sum_aseo = costos_globales.get('Kit de Aseo', 0) + costos_globales.get('Kit para Baños', 0)
+                
+                # Materiales Generales (Excluyendo los 4 grandes + los 2 de aseo que ya sumamos)
+                keys_excluded_pie = ['Transporte', 'Nómina', 'Tecnología', 'Disposición Final', 'Kit de Aseo', 'Kit para Baños']
+                sum_materiales = sum(v for k,v in costos_globales.items() if k not in keys_excluded_pie)
                 
                 df_main_g = pd.DataFrame([
-                    {'Rubro': 'Transporte (Base)', 'Costo': costos_globales.get('Transporte (Base)', 0)},
+                    {'Rubro': 'Transporte', 'Costo': costos_globales.get('Transporte', 0)},
                     {'Rubro': 'Nómina', 'Costo': costos_globales.get('Nómina', 0)},
-                    {'Rubro': 'Aseo y Limpieza', 'Costo': costos_globales.get('Aseo y Limpieza', 0)},
+                    {'Rubro': 'Aseo', 'Costo': sum_aseo},
                     {'Rubro': 'Tecnología', 'Costo': costos_globales.get('Tecnología', 0)},
                     {'Rubro': 'Disposición Final', 'Costo': costos_globales.get('Disposición Final', 0)},
-                    {'Rubro': 'Materiales Operativos', 'Costo': total_materiales_glob}
+                    {'Rubro': 'Materiales', 'Costo': sum_materiales}
                 ])
                 
+                # 2. Detalle Barras (Detallado)
+                # Aquí SI queremos ver los kits de aseo sueltos, por lo que solo excluimos los 4 rubros macro
+                keys_excluded_bar = ['Transporte', 'Nómina', 'Tecnología', 'Disposición Final']
+                
                 df_details_g = pd.DataFrame([
-                    {'Item': k, 'Costo': v} for k, v in costos_globales.items() 
-                    if k not in ['Transporte (Base)', 'Nómina', 'Aseo y Limpieza', 'Tecnología', 'Disposición Final']
+                    {'Item': k, 'Costo': v} for k, v in costos_globales.items() if k not in keys_excluded_bar
                 ]).sort_values('Costo', ascending=True)
                 
                 # Subplots Global
@@ -1360,7 +1717,7 @@ DETALLE POR CIUDAD
                                      subplot_titles=("Presupuesto Nacional Macro", "Detalle Materiales Global"))
                 
                 fig_g.add_trace(go.Pie(labels=df_main_g['Rubro'], values=df_main_g['Costo'], hole=0.4,
-                                     marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00', '#28a745', '#6c757d']), row=1, col=1)
+                                     marker_colors=['#003366', '#0066CC', '#FFB347', '#FF8C00', '#6c757d', '#28a745']), row=1, col=1)
                 
                 fig_g.add_trace(go.Bar(x=df_details_g['Costo'], y=df_details_g['Item'], orientation='h',
                                      marker_color='#FF8C00'), row=1, col=2)
@@ -1374,15 +1731,49 @@ DETALLE POR CIUDAD
                 st.plotly_chart(fig_g, use_container_width=True)
 
                 # Alerta Global
-                if costos_globales.get('Transporte (Base)', 0) > total_global * 0.3:
-                    st.warning(f"⚠️ **Atención:** A nivel nacional, el transporte representa el {costos_globales.get('Transporte (Base)', 0)/total_global:.1%} del presupuesto. Considere optimizar las ciudades con logística compleja.")
+                if costos_globales.get('Transporte', 0) > total_global * 0.3:
+                    st.warning(f"⚠️ **Atención:** A nivel nacional, el transporte representa el {costos_globales.get('Transporte', 0)/total_global:.1%} del presupuesto. Considere optimizar las ciudades con logística compleja.")
 
             st.divider()
 
             # --- ANÁLISIS DE COSTOS POR CIUDAD (NUEVA SECCIÓN) ---
             st.subheader("🏙️ Análisis de Costos por Ciudad")
             
-            for item in resultados_lista:
+            # --- CONTROLES DE FILTRADO Y ORDEN ---
+            col_filtros_1, col_filtros_2 = st.columns([3, 1])
+            with col_filtros_1:
+                filtro_ciudades_ui = st.multiselect(
+                    "🔍 Filtrar Ciudades Específicas:",
+                    options=[r['Ciudad'] for r in resultados_lista],
+                    help="Seleccione una o varias ciudades para ver su detalle."
+                )
+            
+            with col_filtros_2:
+                criterio_orden = st.selectbox(
+                    "🔃 Ordenar Por:",
+                    ["Nombre (A-Z)", "Mayor Costo Total", "Mayor Costo Unitario", "Mayor N° Aspirantes"]
+                )
+            
+            # Lógica de Filtrado y Orden
+            lista_final_ciudades = resultados_lista.copy()
+            
+            # 1. Filtro
+            if filtro_ciudades_ui:
+                lista_final_ciudades = [r for r in lista_final_ciudades if r['Ciudad'] in filtro_ciudades_ui]
+            
+            # 2. Orden
+            if criterio_orden == "Mayor Costo Total":
+                lista_final_ciudades.sort(key=lambda x: x['Costo Total'], reverse=True)
+            elif criterio_orden == "Mayor Costo Unitario":
+                lista_final_ciudades.sort(key=lambda x: x['Costo Unitario'], reverse=True)
+            elif criterio_orden == "Mayor N° Aspirantes":
+                lista_final_ciudades.sort(key=lambda x: x['Aspirantes'], reverse=True)
+            else: # Nombre A-Z
+                lista_final_ciudades.sort(key=lambda x: x['Ciudad'])
+
+            st.caption(f"Mostrando **{len(lista_final_ciudades)}** ciudades.")
+
+            for item in lista_final_ciudades:
                 nombre_ciudad = item['Ciudad']
                 aspirantes_ciudad = item['Aspirantes']
                 modalidad_ciudad = item['Modalidad']
@@ -1391,40 +1782,69 @@ DETALLE POR CIUDAD
                 with st.expander(f"{nombre_ciudad} ({aspirantes_ciudad} asp) - ${costo_total_ciudad:,.0f} ({modalidad_ciudad})"):
                     # Recalcular detalles para esta ciudad: OPTIMIZADO
                     res_ciudad = item['full_res']
-                    
-                    # Preparar DF
-                    # --- VISUALIZACIÓN CIUDAD COMPUESTA ---
-                    costo_mat_c = sum(res_ciudad['desglose_materiales'].values())
-                    df_main_c = pd.DataFrame([
-                        {'Rubro': 'Transporte', 'Costo': res_ciudad['financiero']['Transporte']},
-                        {'Rubro': 'Nómina', 'Costo': res_ciudad['financiero']['Nómina']},
-                        {'Rubro': 'Aseo y Limpieza', 'Costo': res_ciudad['financiero']['Aseo y Limpieza']},
-                        {'Rubro': 'Tecnología', 'Costo': res_ciudad['financiero']['Tecnología']},
-                        {'Rubro': 'Disposición Final', 'Costo': res_ciudad['financiero']['Disposición Final']},
-                        {'Rubro': 'Materiales Ops', 'Costo': costo_mat_c}
-                    ])
-                    df_details_c = pd.DataFrame([
-                        {'Item': k, 'Costo': v} for k, v in res_ciudad['desglose_materiales'].items()
-                    ]).sort_values('Costo', ascending=True)
 
-                    fig_c = make_subplots(rows=1, cols=2, specs=[[{'type': 'domain'}, {'type': 'xy'}]])
-                    fig_c.add_trace(go.Pie(labels=df_main_c['Rubro'], values=df_main_c['Costo'], hole=0.4), row=1, col=1)
-                    fig_c.add_trace(go.Bar(x=df_details_c['Costo'], y=df_details_c['Item'], orientation='h'), row=1, col=2)
+                    # --- KPIS LOGÍSTICOS PROPIOS DE LA CIUDAD ---
+                    st.markdown("#### 📦 Recursos Logísticos Locales")
+                    with st.container(border=True):
+                        kc1, kc2, kc3, kc4 = st.columns(4)
+                        kc1.metric("🏢 Sitios", res_ciudad['logistica']['Sitios'])
+                        kc2.metric("🚪 Salones", res_ciudad['logistica']['Salones'])
+                        
+                        total_personas_c = sum([x['Cantidad'] for x in res_ciudad['detalle_nomina']])
+                        kc3.metric("👥 Staff Local", total_personas_c)
+                        
+                        costo_impresion_viz_c = res_ciudad['financiero'].get('Material Examen Aplicación', 0) / aspirantes_ciudad
+                        kc4.metric("🖨️ Tarifa Impresión", f"${costo_impresion_viz_c:,.0f}/u")
                     
-                    fig_c.update_layout(showlegend=False, 
-                                      paper_bgcolor=ESAP_PALETTE['neutral_light'], 
-                                      height=250, margin=dict(t=20, b=0, l=0, r=0))
+                    st.divider()
                     
-                    # Layout Ciudad: Tabla primero, luego Gráfico
-                    df_display_c = df_main_c.copy()
-                    df_display_c['Porcentaje'] = (df_display_c['Costo'] / costo_total_ciudad * 100).round(1).apply(lambda x: f"{x}%")
+                    # Preparar Tabla Detallada Solicitada
+                    fin_c = res_ciudad['financiero']
                     
-                    st.dataframe(
-                        df_display_c[['Rubro', 'Costo', 'Porcentaje']].style.format({'Costo': '${:,.0f}'}),
-                        use_container_width=True, hide_index=True
-                    )
+                    # Definición de items exactos solicitados
+                    items_detalle = [
+                        ("Empaque", fin_c.get('Empaque', 0)),
+                        ("Kit Dactiloscopista", fin_c.get('Kit Dactiloscopista', 0)),
+                        ("Kit de aplicación", fin_c.get('Kit de Aplicación', 0)), # FIX: Key is 'Kit de Aplicación' (Title Case)
+                        ("Kit de aseo", fin_c.get('Kit de Aseo', 0)),
+                        ("Kit para baños", fin_c.get('Kit para Baños', 0)),
+                        ("Lectura", fin_c.get('Lectura y Procesamiento', 0)),
+                        ("Material aplicación", fin_c.get('Material Aplicación (Papelería)', 0)), # Mapping "Material aplicación" to Papelería
+                        ("Material examen aplicación", fin_c.get('Material Examen Aplicación', 0)),
+                        ("Material examen exhibición", fin_c.get('Material Examen Exhibición', 0)),
+                        ("Personal logístico", fin_c.get('Personal Logístico', 0)),
+                        ("Transporte", fin_c.get('Transporte y Distribución', 0)),
+                        ("Infraestructura (Diagramación)", fin_c.get('Infraestructura (Diagramación)', 0)) # Added for completeness/check
+                    ]
                     
-                    st.plotly_chart(fig_c, use_container_width=True)
+                    # Filtrar infraestructura si es 0 (usualmente es global)
+                    items_detalle = [i for i in items_detalle if i[0] != "Infraestructura (Diagramación)"]
+
+                    df_display_c = pd.DataFrame(items_detalle, columns=['Rubro', 'Valor'])
+                    df_display_c['Valor'] = df_display_c['Valor'].apply(lambda x: f"${x:,.0f}")
+                    
+                    # Layout Ciudad: Tabla y Gráfico
+                    c_tbl, c_graph = st.columns([1, 1])
+                    
+                    with c_tbl:
+                        st.dataframe(
+                            df_display_c,
+                            use_container_width=True, 
+                            hide_index=True,
+                            column_config={
+                                "Rubro": st.column_config.TextColumn("Concepto", width="medium"),
+                                "Valor": st.column_config.TextColumn("Costo Estimado", width="small")
+                            }
+                        )
+                    
+                    with c_graph:
+                        # Gráfico simple de los top 5 costos para no saturar
+                        df_chart = pd.DataFrame(items_detalle, columns=['Rubro', 'Costo']).sort_values('Costo', ascending=True).tail(5)
+                        fig_c = px.bar(df_chart, x='Costo', y='Rubro', orientation='h', title="Top 5 Costos Locales", text_auto='.2s')
+                        fig_c.update_traces(marker_color=ESAP_PALETTE['primary'], textfont_size=10)
+                        fig_c.update_layout(showlegend=False, margin=dict(l=0, r=0, t=30, b=0), height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_c, use_container_width=True)
+
                     st.info(f"💰 Total Ciudad: ${costo_total_ciudad:,.0f}")
 
 # Footer mejorado
