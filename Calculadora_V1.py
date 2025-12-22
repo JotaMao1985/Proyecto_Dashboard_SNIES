@@ -311,10 +311,27 @@ TARIFAS_NOMINA = {
     'Enfermería': 200000, 'Ing. Sistemas': 283333
 }
 
+# Constante para claves de materiales (reutilizable en toda la app)
+KEYS_MATERIALES = [
+    'Infraestructura (Diagramación)', 'Material Examen Aplicación', 'Material Examen Exhibición',
+    'Lectura y Procesamiento', 'Material Aplicación (Papelería)', 'Kit de Aplicación', 
+    'Kit Dactiloscopista', 'Empaque', 'Disposición Final'
+]
+
+# Lista ordenada de ciudades disponibles (evita duplicación)
+CIUDADES_DISPONIBLES = sorted([
+    'Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'San Andrés', 'Quibdó', 
+    'Ibagué', 'Tunja', 'Villavicencio', 'Pereira', 'Manizales', 'Cartagena', 
+    'Santa Marta', 'Riohacha', 'Arauca', 'Cúcuta', 'Pasto', 'Popayán',
+    'Florencia', 'Yopal', 'Valledupar', 'Montería', 'Neiva', 'Mocoa',
+    'Armenia', 'Bucaramanga', 'Sincelejo'
+])
+
 # ==============================================================================
 # 1. LÓGICA DEL NEGOCIO (FUNCIONES DEL MODELO PARAMÉTRICO)
 # ==============================================================================
 
+@st.cache_data
 def obtener_costos_tecnologia(cantidad_equipos_base, n_sitios, requiere_alquiler):
     """
     Calcula costos de alquiler basado en la cantidad solicitada MANUALMENTE por el usuario.
@@ -363,6 +380,7 @@ def obtener_costos_tecnologia(cantidad_equipos_base, n_sitios, requiere_alquiler
         }
     }
 
+@st.cache_data
 def obtener_costo_unitario_logistico(ciudad, n_aspirantes):
     """
     Retorna el Costo Unitario de Transporte exacto según el volumen (Rango 1, 2 o 3).
@@ -395,6 +413,7 @@ def obtener_costo_unitario_logistico(ciudad, n_aspirantes):
         # Volumen alto (Rango 3 o superior) -> Precio más económico
         return r3_price
 
+@st.cache_data
 def obtener_costos_disposicion_final(n_aspirantes):
     """
     Calcula costos de custodia y destrucción segura de material.
@@ -433,10 +452,14 @@ def get_precio_rango(cantidad, limites, precios):
     lim_r1, lim_r2 = limites
     p_r1, p_r2, p_r3 = precios
     
-    if cantidad <= lim_r1: return p_r1
-    elif cantidad <= lim_r2: return p_r2
-    else: return p_r3
+    if cantidad <= lim_r1:
+        return p_r1
+    elif cantidad <= lim_r2:
+        return p_r2
+    else:
+        return p_r3
 
+@st.cache_data
 def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
     """
     Calcula los costos desglosados exactamente en las categorías solicitadas.
@@ -496,9 +519,12 @@ def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
     p_cuad = get_precio_rango(n_aspirantes, lim_asp, (5705, 4909, 4744))
     
     # Hoja Respuesta (Ajuste de anomalía en CSV Rango 2):
-    if n_aspirantes <= 1000: p_hr = 192
-    elif n_aspirantes <= 1500: p_hr = 150 # Suavizado manual
-    else: p_hr = 36
+    if n_aspirantes <= 1000:
+        p_hr = 192
+    elif n_aspirantes <= 1500:
+        p_hr = 150  # Suavizado manual
+    else:
+        p_hr = 36
     
     # Hoja de notas (asumimos costo similar a una hoja de respuesta simple o fotocopia)
     p_notas = 50 
@@ -542,8 +568,12 @@ def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
 
     # --- DISPOSICIÓN FINAL ---
     # Custodia y Destrucción (Source Final CSV)
-    if n_aspirantes > 1000: p_cust = 486818; p_dest = 1428
-    else: p_cust = 194727; p_dest = 2618
+    if n_aspirantes > 1000:
+        p_cust = 486818
+        p_dest = 1428
+    else:
+        p_cust = 194727
+        p_dest = 2618
     costo_disposicion = (p_cust * 2) + (n_aspirantes * p_dest)
 
     # SUMA TOTAL DE MATERIALES E INSUMOS
@@ -981,14 +1011,9 @@ elif opcion == "3. Calculadora de Costos":
                 help="Ingrese el número total de personas que presentarán la prueba. Mínimo 1 aspirante."
             )
         with col2:
-            ciudades = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'San Andrés', 'Quibdó', 
-                        'Ibagué', 'Tunja', 'Villavicencio', 'Pereira', 'Manizales', 'Cartagena', 
-                        'Santa Marta', 'Riohacha', 'Arauca', 'Cúcuta', 'Pasto', 'Popayán',
-                        'Florencia', 'Yopal', 'Valledupar', 'Montería', 'Neiva', 'Mocoa',
-                        'Armenia', 'Bucaramanga', 'Sincelejo']
             ciudad = st.selectbox(
                 "Ciudad de Aplicación", 
-                sorted(ciudades),
+                CIUDADES_DISPONIBLES,
                 help="Seleccione la ciudad donde se realizará el concurso. Los costos varían según la ubicación geográfica."
             )
         with col3:
@@ -1076,7 +1101,7 @@ elif opcion == "3. Calculadora de Costos":
             c2.metric("🚪 Salones", res['logistica']['Salones'], help="Número de salones requeridos (25 aspirantes por salón)")
             total_personas = sum([item['Cantidad'] for item in res['detalle_nomina']])
             c3.metric("👥 Total Staff", total_personas, help="Personal total requerido para la operación")
-            costo_impresion_viz = res['desglose_materiales']['1. Impresión Variable'] / aspirantes
+            costo_impresion_viz = res['financiero']['Material Examen Aplicación'] / aspirantes
             c4.metric("🖨️ Tarifa Impresión", f"${costo_impresion_viz:,.0f}/u", help="Costo por cuadernillo según volumen")
         
         # --- PESTAÑAS PARA EL DETALLE ---
@@ -1094,20 +1119,25 @@ elif opcion == "3. Calculadora de Costos":
             total_costos = res['financiero']['TOTAL_BASE']
             
             # --- VISUALIZACIÓN COMPUESTA (PIE + BAR) ---
-            # 1. Preparar datos Macro (Pie)
-            costo_materiales_ops = sum(res['desglose_materiales'].values())
+            # 1. Definir claves de materiales para agrupación
+            keys_materiales = [
+                'Infraestructura (Diagramación)', 'Material Examen Aplicación', 'Material Examen Exhibición',
+                'Lectura y Procesamiento', 'Material Aplicación (Papelería)', 'Kit de Aplicación', 
+                'Kit Dactiloscopista', 'Empaque', 'Disposición Final'
+            ]
+            costo_materiales_ops = sum(res['financiero'].get(k, 0) for k in keys_materiales)
             
             df_main = pd.DataFrame([
-                {'Rubro': 'Transporte (Base)', 'Costo': res['financiero']['Transporte']},
-                {'Rubro': 'Nómina', 'Costo': res['financiero']['Nómina']},
-                {'Rubro': 'Kits de Aseo', 'Costo': res['financiero']['Aseo y Limpieza']},
-                {'Rubro': 'Tecnología', 'Costo': res['financiero']['Tecnología']},
+                {'Rubro': 'Transporte', 'Costo': res['financiero'].get('Transporte y Distribución', 0)},
+                {'Rubro': 'Nómina', 'Costo': res['financiero'].get('Personal Logístico', 0)},
+                {'Rubro': 'Kits de Aseo', 'Costo': res['financiero'].get('Kit de Aseo', 0) + res['financiero'].get('Kit para Baños', 0)},
+                {'Rubro': 'Tecnología', 'Costo': res['financiero'].get('Tecnología (Alquiler PC)', 0)},
                 {'Rubro': 'Materiales Operativos', 'Costo': costo_materiales_ops}
             ])
             
-            # 2. Preparar datos Detalle (Bar)
+            # 2. Preparar datos Detalle (Bar) - solo materiales
             df_details = pd.DataFrame([
-               {'Item': k, 'Costo': v} for k, v in res['desglose_materiales'].items()
+               {'Item': k, 'Costo': res['financiero'].get(k, 0)} for k in keys_materiales if res['financiero'].get(k, 0) > 0
             ]).sort_values('Costo', ascending=True)
 
             # 3. Crear Subplots
@@ -1158,16 +1188,10 @@ elif opcion == "4. Cotización Multi-Ciudad":
         unsafe_allow_html=True
     )
     
-    # 1. Selección de Ciudades
-    ciudades_disponibles = sorted(['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'San Andrés', 'Quibdó', 
-                'Ibagué', 'Tunja', 'Villavicencio', 'Pereira', 'Manizales', 'Cartagena', 
-                'Santa Marta', 'Riohacha', 'Arauca', 'Cúcuta', 'Pasto', 'Popayán',
-                'Florencia', 'Yopal', 'Valledupar', 'Montería', 'Neiva', 'Mocoa',
-                'Armenia', 'Bucaramanga', 'Sincelejo'])
-    
+    # 1. Selección de Ciudades (usa constante global)
     ciudades_sel = st.multiselect(
         "🏙️ Seleccione las Ciudades del Operativo:", 
-        ciudades_disponibles, 
+        CIUDADES_DISPONIBLES, 
         default=["Bogotá", "Medellín"],
         help="Puede seleccionar múltiples ciudades. Los costos se calcularán individualmente y se sumarán para el total nacional."
     )
@@ -1386,7 +1410,7 @@ elif opcion == "4. Cotización Multi-Ciudad":
                 df_res_view = df_res
             
             # Formato condicional para resaltar costos altos
-                st.dataframe(
+            st.dataframe(
                 df_res_view.style.format({
                     'Costo Total': '${:,.0f}',
                     'Costo Unitario': '${:,.0f}',
@@ -1673,14 +1697,21 @@ elif opcion == "4. Cotización Multi-Ciudad":
                     
                     # Agregación atómica (guardamos cada rubro individualmente)
                     for k, v in fin.items():
-                        if k == 'TOTAL_BASE': continue
+                        if k == 'TOTAL_BASE':
+                            continue
                         
                         # Estandarizar Nombres Principales para Agrupación
-                        if k == KEY_TRANS: key_target = 'Transporte'
-                        elif k == KEY_NOMINA: key_target = 'Nómina'
-                        elif k == KEY_TECH: key_target = 'Tecnología'
-                        elif k == 'Disposición Final': key_target = 'Disposición Final'
-                        else: key_target = k # Mantener nombre original (ej: Kits, Papelería, etc.)
+                        if k == KEY_TRANS:
+                            key_target = 'Transporte'
+                        elif k == KEY_NOMINA:
+                            key_target = 'Nómina'
+                        elif k == KEY_TECH:
+                            key_target = 'Tecnología'
+                        elif k == 'Disposición Final':
+                            key_target = 'Disposición Final'
+                        else:
+                            # Mantener nombre original (ej: Kits, Papelería, etc.)
+                            key_target = k
                         
                         costos_globales[key_target] = costos_globales.get(key_target, 0) + v
 
