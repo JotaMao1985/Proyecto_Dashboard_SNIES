@@ -769,7 +769,7 @@ st.sidebar.markdown(
             Sistema de Costeo de Concursos
         </p>
         <p style="color: #ffffff; font-size: 0.7rem; margin: 0.3rem 0 0 0; opacity: 0.7;">
-            v1.0 | Diciembre 2025
+            v2.0 | Diciembre 2025
         </p>
     </div>
     """,
