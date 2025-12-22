@@ -1646,7 +1646,91 @@ elif opcion == "4. Cotización Multi-Ciudad":
             st.divider()
 
             # --- PESTAÑAS PARA EL DETALLE GLOBAL ---
-            tab_glob_1, tab_glob_2 = st.tabs(["👥 Nómina Detallada Global", "📊 Análisis de Costos Global"])
+            tab_glob_1, tab_glob_new, tab_glob_2 = st.tabs(["👥 Nómina Detallada Global", "📦 Consolidado de Recursos", "📊 Análisis de Costos Global"])
+
+            with tab_glob_new:
+                st.markdown("### 📦 Consolidado de Recursos e Insumos")
+                st.info("Resumen totalizado de cantidades y costos para la operación nacional.")
+                
+                # Inicializar acumuladores para la tabla solicitada
+                # Estructura: Key_User -> {qty: 0, cost: 0}
+                import math
+                
+                # Mapeo de Campos Solicitados
+                # Definimos los items y su lógica de cantidad
+                
+                items_consolidado = {
+                    "Empaque": {"cost_key": "Empaque", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Kit Dactiloscopista": {"cost_key": "Kit Dactiloscopista", "qty_type": "calc_dactilo", "val": 0, "cost": 0},
+                    "Kit de aplicación": {"cost_key": "Kit de Aplicación", "qty_type": "salones", "val": 0, "cost": 0},
+                    "Kit de aseo": {"cost_key": "Kit de Aseo", "qty_type": "calc_aseo", "val": 0, "cost": 0},
+                    "Kit para baños": {"cost_key": "Kit para Baños", "qty_type": "calc_aseo", "val": 0, "cost": 0}, # Usa misma base que aseo
+                    "Lectura": {"cost_key": "Lectura y Procesamiento", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Material exhibición": {"cost_key": "Material Examen Exhibición", "qty_type": "aspirantes", "val": 0, "cost": 0}, # Mapping directo
+                    "Material aplicación": {"cost_key": "Material Aplicación (Papelería)", "qty_type": "salones", "val": 0, "cost": 0}, # Base Salones
+                    "Material examen aplicación": {"cost_key": "Material Examen Aplicación", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Material examen exhibición": {"cost_key": "Material Examen Exhibición", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Personal logístico": {"cost_key": "Personal Logístico", "qty_type": "staff", "val": 0, "cost": 0},
+                    "Transporte": {"cost_key": "Transporte y Distribución", "qty_type": "aspirantes", "val": 0, "cost": 0}
+                }
+                
+                # Iterar sobre las ciudades y acumular
+                for item in resultados_lista:
+                    res = item['full_res']
+                    fin = res['financiero']
+                    log = res['logistica']
+                    asp_c = item['Aspirantes']
+                    salones_c = log['Salones']
+                    staff_c = log['Staff Total']
+                    
+                    # Cantidades calculadas
+                    q_dactilo_c = math.ceil(salones_c / 4)
+                    q_aseo_c = math.ceil(salones_c / 6)
+                    
+                    for nombre_item, data in items_consolidado.items():
+                        # Acumular Costo
+                        ckey = data['cost_key']
+                        costo_item = fin.get(ckey, 0)
+                        data['cost'] += costo_item
+                        
+                        # Acumular Cantidad
+                        qtype = data['qty_type']
+                        if qtype == "aspirantes":
+                            data['val'] += asp_c
+                        elif qtype == "salones":
+                            data['val'] += salones_c
+                        elif qtype == "staff":
+                            data['val'] += staff_c
+                        elif qtype == "calc_dactilo":
+                            data['val'] += q_dactilo_c
+                        elif qtype == "calc_aseo":
+                            data['val'] += q_aseo_c
+                            
+                # Construir DataFrame
+                rows_cons = []
+                for nombre_item, data in items_consolidado.items():
+                    rows_cons.append({
+                        "Concepto": nombre_item,
+                        "Cantidad Total": data['val'],
+                        "Costo Total": data['cost']
+                    })
+                    
+                df_consolidado = pd.DataFrame(rows_cons)
+                
+                # Visualización
+                st.dataframe(
+                    df_consolidado.style.format({
+                        "Costo Total": "${:,.0f}",
+                        "Cantidad Total": "{:,.0f}"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Totalizador simple al pie
+                total_cons = df_consolidado['Costo Total'].sum()
+                st.caption(f"**Suma de items listados:** ${total_cons:,.0f}")
+
 
             with tab_glob_1:
                 # Agrupar nómina global
