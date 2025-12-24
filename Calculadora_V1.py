@@ -460,7 +460,7 @@ def get_precio_rango(cantidad, limites, precios):
         return p_r3
 
 @st.cache_data
-def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
+def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff, n_formas=1):
     """
     Calcula los costos desglosados exactamente en las categorías solicitadas.
     Precios dinámicos basados en Recopilado_Perso.xlsx.
@@ -469,7 +469,9 @@ def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
     # 1. INFRAESTRUCTURA (Setup Inicial)
     # Corresponde a "Diagramación de cuadernillo en formato editorial"
     # Costo fijo único del proyecto (Source 2)
-    costo_infraestructura = 1599239
+    precio_unitario_diseno = 1599239
+    # El costo se multiplica por la cantidad de versiones distintas del examen
+    costo_infraestructura = precio_unitario_diseno * n_formas
     
     # 2. EMPAQUE (Costo - Cantidad)
     # Empaque individual (Cuadernillo + HR).
@@ -599,7 +601,7 @@ def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff):
         'Disposición Final': costo_disposicion
     }
 
-def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0):
+def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0, n_formas=1):
     """
     Calcula el presupuesto total integrando Logística, Nómina, Materiales (8 Cats),
     Tecnología, Aseo y Transporte.
@@ -661,7 +663,7 @@ def calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alqu
     # --- C. MATERIALES DETALLADOS (8 CATEGORÍAS) ---
     # Llamada a la función auditada que devuelve el costo total y el desglose
     total_materiales_general, desglose_mat = obtener_detalles_materiales(
-        n_aspirantes, n_salones, n_sitios, total_staff
+        n_aspirantes, n_salones, n_sitios, total_staff, n_formas
     )
 
     # --- D. KITS DE ASEO Y BAÑOS ---
@@ -1017,6 +1019,14 @@ if opcion == "1. Contexto y EDA":
                 step=10,
                 help="Ingrese el número total de personas que presentarán la prueba. Mínimo 1 aspirante."
             )
+        # NUEVO CONTROL DE FORMAS
+        n_formas = st.number_input(
+            "N° Tipos de Examen (Formas)", 
+            min_value=1, 
+            max_value=20, 
+            value=1,
+            help="Cantidad de versiones distintas del cuadernillo (Ej: Profesional, Técnico, Asistencial = 3 formas). Cada una requiere diseño independiente."
+        )
         with col2:
             ciudad = st.selectbox(
                 "Ciudad de Aplicación", 
@@ -1211,14 +1221,26 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
         # 2. Configuración Global de Modalidad
         st.subheader("⚙️ Configuración del Operativo")
         
-        col_global_1, col_global_2 = st.columns(2)
+        col_global_1, col_global_2, col_global_3 = st.columns(3)
         with col_global_1:
             modalidad_global = st.radio(
                 "Modalidad General", 
                 ["Escrita presencial - Material impreso", "Escrita presencial - Virtual en ambiente controlado"],
-                horizontal=True,
+                horizontal=False,
                 help="La modalidad aplica para todas las ciudades seleccionadas. Escrita requiere más personal, Virtual requiere más tecnología."
             )
+        
+        with col_global_2:
+            formas_global = st.number_input(
+                "📝 Formas de Prueba",
+                min_value=1,
+                max_value=20,
+                value=1,
+                step=1,
+                help="Cantidad de versiones diferentes del examen (ej: Forma A, B, C). Aplica a todas las ciudades. Afecta costos de diagramación."
+            )
+            if formas_global > 1:
+                st.caption(f"Se aplicarán {formas_global} versiones del examen en todas las ciudades.")
         
         # 3. Configuración de Aspirantes (Data Editor)
         st.subheader("📋 Asignación de Aspirantes por Ciudad")
@@ -1243,13 +1265,13 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
         # Configuración de columnas base
         col_config = {
             "Aspirantes": st.column_config.NumberColumn(
-                "N° Aspirantes",
+                "N° Aspirantes (Digite el número de aspirantes)",
                 min_value=1,
                 max_value=100000,
                 step=10,
             ),
             "Discapacitados": st.column_config.NumberColumn(
-                "Personas con Discapacidad",
+                "Personas en situación de Discapacidad",
                 min_value=0,
                 max_value=100000, 
                 step=1,
@@ -1301,8 +1323,8 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                 req_alquiler = es_virtual and (equipos_iter > 0)
                 
                 # Calcular usando la función existente
-                # calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler=False, n_equipos_alquiler=0)
-                res = calcular_modelo_parametrico(asp_iter, ciudad_iter, mod_iter, requiere_alquiler=req_alquiler, n_equipos_alquiler=equipos_iter)
+                # calcular_modelo_parametrico(n_aspirantes, ciudad, tipo_prueba, requiere_alquiler, n_equipos_alquiler, n_formas)
+                res = calcular_modelo_parametrico(asp_iter, ciudad_iter, mod_iter, requiere_alquiler=req_alquiler, n_equipos_alquiler=equipos_iter, n_formas=formas_global)
                 
                 # Acumular
                 costo_base = res['financiero']['TOTAL_BASE']
@@ -1314,6 +1336,7 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                 resultados_lista.append({
                     'Ciudad': ciudad_iter,
                     'Aspirantes': asp_iter,
+                    'Formas': formas_global,
                     'Discapacitados': discap_iter,
                     'Equipos': equipos_iter,
                     'Modalidad': mod_iter,
@@ -1337,6 +1360,8 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
             st.session_state['mc_total_max'] = total_max_global
             st.session_state['mc_aspirantes'] = total_aspirantes
             st.session_state['mc_es_virtual'] = es_virtual # Guardar contexto
+            st.session_state['mc_modalidad'] = modalidad_global # Guardar modalidad
+            st.session_state['mc_formas'] = formas_global # Guardar formas de prueba
             
         # --- RENDERIZADO PERSISTENTE ---
         if 'mc_resultados' in st.session_state:
@@ -1426,6 +1451,7 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                     'Costo Total': '${:,.0f}',
                     'Costo Unitario': '${:,.0f}',
                     'Aspirantes': '{:,.0f}',
+                    'Formas': '{:,.0f}',
                     'Discapacitados': '{:,.0f}',
                     'Equipos': '{:,.0f}'
                 }).background_gradient(subset=['Costo Total'], cmap='Blues'),
@@ -1575,6 +1601,107 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                     </div>
                     """
                 
+                # C. Tabla de Nómina Consolidada para HTML
+                nomina_html_dict = {}
+                for item in resultados_lista:
+                    res_temp = item['full_res']
+                    for cargo in res_temp['detalle_nomina']:
+                        nombre_cargo = cargo['Cargo']
+                        if nombre_cargo not in nomina_html_dict:
+                            nomina_html_dict[nombre_cargo] = {'Cantidad': 0, 'Subtotal': 0, 'Tarifa': cargo['Tarifa']}
+                        nomina_html_dict[nombre_cargo]['Cantidad'] += cargo['Cantidad']
+                        nomina_html_dict[nombre_cargo]['Subtotal'] += cargo['Subtotal']
+                
+                html_nomina_rows = ""
+                total_nomina_html = 0
+                for cargo, data in nomina_html_dict.items():
+                    html_nomina_rows += f"<tr><td>{cargo}</td><td>{data['Cantidad']:,}</td><td>${data['Tarifa']:,.0f}</td><td style='font-weight: bold;'>${data['Subtotal']:,.0f}</td></tr>"
+                    total_nomina_html += data['Subtotal']
+                
+                html_nomina_consolidada = f"""
+                <table>
+                    <thead>
+                        <tr><th>Cargo</th><th>Cantidad</th><th>Tarifa Unitaria</th><th>Subtotal</th></tr>
+                    </thead>
+                    <tbody>
+                        {html_nomina_rows}
+                        <tr style="background: #003366; color: white; font-weight: bold;">
+                            <td colspan="3">TOTAL NÓMINA</td>
+                            <td>${total_nomina_html:,.0f}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                """
+                
+                # D. Tabla de Recursos Consolidados para HTML
+                recursos_html_dict = {
+                    "Empaque": {"cost_key": "Empaque", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Kit Dactiloscopista": {"cost_key": "Kit Dactiloscopista", "qty_type": "calc_dactilo", "val": 0, "cost": 0},
+                    "Kit de Aplicación": {"cost_key": "Kit de Aplicación", "qty_type": "salones", "val": 0, "cost": 0},
+                    "Kit de Aseo": {"cost_key": "Kit de Aseo", "qty_type": "calc_aseo", "val": 0, "cost": 0},
+                    "Kit para Baños": {"cost_key": "Kit para Baños", "qty_type": "calc_aseo", "val": 0, "cost": 0},
+                    "Lectura y Procesamiento": {"cost_key": "Lectura y Procesamiento", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Material Examen Aplicación": {"cost_key": "Material Examen Aplicación", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Material Examen Exhibición": {"cost_key": "Material Examen Exhibición", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Material Aplicación (Papelería)": {"cost_key": "Material Aplicación (Papelería)", "qty_type": "salones", "val": 0, "cost": 0},
+                    "Infraestructura (Diagramación)": {"cost_key": "Infraestructura (Diagramación)", "qty_type": "formas", "val": 0, "cost": 0},
+                    "Transporte y Distribución": {"cost_key": "Transporte y Distribución", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                    "Tecnología (Alquiler PC)": {"cost_key": "Tecnología (Alquiler PC)", "qty_type": "equipos", "val": 0, "cost": 0},
+                    "Disposición Final": {"cost_key": "Disposición Final", "qty_type": "aspirantes", "val": 0, "cost": 0},
+                }
+                
+                for item in resultados_lista:
+                    res = item['full_res']
+                    fin = res['financiero']
+                    log = res['logistica']
+                    asp_c = item['Aspirantes']
+                    salones_c = log['Salones']
+                    equipos_c = item.get('Equipos', 0)
+                    
+                    q_dactilo_c = math.ceil(salones_c / 4)
+                    q_aseo_c = math.ceil(salones_c / 6)
+                    
+                    for nombre_item, data in recursos_html_dict.items():
+                        ckey = data['cost_key']
+                        costo_item = fin.get(ckey, 0)
+                        data['cost'] += costo_item
+                        
+                        qtype = data['qty_type']
+                        if qtype == "aspirantes":
+                            data['val'] += asp_c
+                        elif qtype == "salones":
+                            data['val'] += salones_c
+                        elif qtype == "calc_dactilo":
+                            data['val'] += q_dactilo_c
+                        elif qtype == "calc_aseo":
+                            data['val'] += q_aseo_c
+                        elif qtype == "equipos":
+                            data['val'] += equipos_c
+                        elif qtype == "formas":
+                            data['val'] = st.session_state.get('mc_formas', 1)  # Es global, no se suma
+                
+                html_recursos_rows = ""
+                total_recursos_html = 0
+                for concepto, data in recursos_html_dict.items():
+                    if data['cost'] > 0:
+                        html_recursos_rows += f"<tr><td>{concepto}</td><td>{data['val']:,}</td><td style='font-weight: bold;'>${data['cost']:,.0f}</td></tr>"
+                        total_recursos_html += data['cost']
+                
+                html_recursos_consolidados = f"""
+                <table>
+                    <thead>
+                        <tr><th>Concepto</th><th>Cantidad</th><th>Costo Total</th></tr>
+                    </thead>
+                    <tbody>
+                        {html_recursos_rows}
+                        <tr style="background: #003366; color: white; font-weight: bold;">
+                            <td colspan="2">TOTAL RECURSOS</td>
+                            <td>${total_recursos_html:,.0f}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                """
+                
                 reporte_html = f"""
                 <!DOCTYPE html>
                 <html>
@@ -1586,10 +1713,30 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                 <body>
                     <div class="header">
                         <h1>Reporte de Cotización Nacional</h1>
-                        <p>ESAP - Simulador de Costos</p>
+                        <p>ESAP - Simulador de Costos de Concursos</p>
                     </div>
                     
                     <div class="container">
+                        <!-- CONFIGURACIÓN DEL OPERATIVO -->
+                        <div class="section-title">⚙️ Configuración del Operativo</div>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 5px solid #FF8C00;">
+                            <table style="width: 100%; box-shadow: none; margin: 0;">
+                                <tr>
+                                    <td style="border: none; padding: 10px;"><strong>Modalidad:</strong></td>
+                                    <td style="border: none; padding: 10px;">{st.session_state.get('mc_modalidad', 'No especificada')}</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: none; padding: 10px;"><strong>Formas de Prueba:</strong></td>
+                                    <td style="border: none; padding: 10px;">{st.session_state.get('mc_formas', 1)}</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: none; padding: 10px;"><strong>Ciudades:</strong></td>
+                                    <td style="border: none; padding: 10px;">{len(resultados_lista)}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <!-- RESUMEN EJECUTIVO -->
                         <div class="section-title">📊 Resumen Ejecutivo</div>
                         
                         <div class="summary-grid">
@@ -1616,6 +1763,7 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                             </div>
                         </div>
                         
+                        <!-- RESUMEN POR CIUDAD -->
                         <div class="section-title">📍 Resumen por Ciudad</div>
                         <table>
                             <thead>
@@ -1633,12 +1781,21 @@ if True:  # opcion == "4. Cotización Multi-Ciudad":
                             </tbody>
                         </table>
                         
+                        <!-- NÓMINA CONSOLIDADA -->
+                        <div class="section-title">👥 Personal Logístico Consolidado</div>
+                        {html_nomina_consolidada}
+                        
+                        <!-- RECURSOS E INSUMOS -->
+                        <div class="section-title">📦 Consolidado de Recursos e Insumos</div>
+                        {html_recursos_consolidados}
+                        
+                        <!-- DETALLE POR CIUDAD -->
                         <div class="section-title">🏙️ Análisis Detallado por Ciudad</div>
                         {html_detalles}
                         
                         <div class="footer">
                             Generado automáticamente por el Simulador de Costos ESAP<br>
-                            Fecha: Diciembre 2025
+                            Fecha: {pd.Timestamp.now().strftime('%d de %B de %Y')}
                         </div>
                     </div>
                 </body>
