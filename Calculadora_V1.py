@@ -531,12 +531,24 @@ def obtener_detalles_materiales(n_aspirantes, n_salones, n_sitios, total_staff, 
     # Hoja de notas (asumimos costo similar a una hoja de respuesta simple o fotocopia)
     p_notas = 50 
     
-    costo_mat_examen_app = n_aspirantes * (p_cuad + p_hr + p_notas)
+    # CASO B: Cada aspirante recibe TODAS las formas de prueba
+    # El material de examen (cuadernillo + HR + notas) se multiplica por n_formas
+    # Ejemplo: 3 formas = 3 cuadernillos por aspirante
+    costo_mat_examen_app = n_aspirantes * (p_cuad + p_hr + p_notas) * n_formas
 
     # 9. MATERIAL EXAMEN EXHIBICIÓN (Documentos legales y copias)
     # Clave de Respuesta ($978) + Acuerdo Confidencialidad ($680) + Copia HR ($319)
-    p_exhib = 978 + 680 + 319
-    costo_mat_examen_exhib = n_aspirantes * p_exhib
+    # La CLAVE DE RESPUESTA se multiplica por formas (1 clave por cada forma)
+    # La Copia HR también se multiplica (1 por cada forma que presenta el aspirante)
+    p_clave_resp = 978
+    p_acuerdo = 680  # Acuerdo confidencialidad (1 por aspirante, no por forma)
+    p_copia_hr = 319  # Copia HR (1 por cada forma)
+    
+    # Clave de respuesta: n_formas claves × costo × cantidad de juegos necesarios por sitio
+    costo_claves_respuesta = n_formas * p_clave_resp * n_sitios * 2  # 2 juegos por sitio (original + backup)
+    costo_acuerdos = n_aspirantes * p_acuerdo  # 1 acuerdo por aspirante
+    costo_copias_hr = n_aspirantes * p_copia_hr * n_formas  # 1 copia HR por cada forma
+    costo_mat_examen_exhib = costo_claves_respuesta + costo_acuerdos + costo_copias_hr
 
     # 10. MATERIAL APLICACIÓN (Papelería Técnica / Señalización)
     # Listados, Actas, Afiches, Rótulos, Informes.
